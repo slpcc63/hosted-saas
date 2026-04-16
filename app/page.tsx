@@ -1,10 +1,12 @@
 import { SiteHeader } from "@/components/site-header";
+import { getPublicRouting } from "@/lib/request-routing";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.slpcc63.com";
 const rootDomain =
   process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "slpcc63.com";
 
-export default function HomePage() {
+export default async function HomePage() {
+  const routing = await getPublicRouting();
+
   return (
     <>
       <SiteHeader />
@@ -25,8 +27,8 @@ export default function HomePage() {
               .
             </p>
             <div className="hero-actions">
-              <a className="pill primary" href={appUrl}>
-                Open planned app URL
+              <a className="pill primary" href={routing.launchProductHref}>
+                Open the app
               </a>
               <a className="pill" href="#stack">
                 See the stack
@@ -63,8 +65,8 @@ export default function HomePage() {
               <h3>Host-aware routing</h3>
               <p>
                 Requests for the app subdomain are rewritten to internal product
-                routes, so the app can own `/` on `app.slpcc63.com` without
-                disturbing the marketing homepage.
+                routes in production, while preview deployments stay on their
+                own Vercel URL and link directly into the app paths.
               </p>
             </article>
             <article className="feature-card">

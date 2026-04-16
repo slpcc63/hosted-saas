@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
 import { WorkspaceForm } from "@/components/workspace-form";
 import { requireSession } from "@/lib/auth/server";
+import { getPublicRouting } from "@/lib/request-routing";
 import { getWorkspaceByOwnerId } from "@/lib/workspaces";
 
 const rootDomain =
@@ -16,7 +17,8 @@ type AppHomePageProps = {
 };
 
 export default async function AppHomePage({ searchParams }: AppHomePageProps) {
-  const session = await requireSession("/");
+  const routing = await getPublicRouting();
+  const session = await requireSession(routing.appHomePath);
   const workspace = await getWorkspaceByOwnerId(session.user.id);
   const params = await searchParams;
   const hasWorkspace = Boolean(workspace);
@@ -54,7 +56,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 {hasWorkspace ? "Configured" : "Needs setup"}
               </div>
             </div>
-            <WorkspaceForm redirectTo="/" workspace={workspace} />
+            <WorkspaceForm redirectTo={routing.appHomePath} workspace={workspace} />
           </section>
 
           <aside className="dashboard-card">

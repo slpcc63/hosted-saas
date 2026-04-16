@@ -2,7 +2,7 @@ import { saveWorkspaceAction } from "@/app/app/actions";
 import { Workspace } from "@/lib/workspaces";
 
 type WorkspaceFormProps = {
-  redirectTo: "/" | "/dashboard";
+  redirectTo: string;
   workspace: Workspace | null;
 };
 

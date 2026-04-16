@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { AuthForm } from "@/components/auth/auth-form";
 import { SiteHeader } from "@/components/site-header";
+import { isPreviewDeployment } from "@/lib/deployment";
+import { getPublicRouting } from "@/lib/request-routing";
 import { getServerSession } from "@/lib/auth/server";
 
 type SignInPageProps = {
@@ -12,16 +14,17 @@ type SignInPageProps = {
 
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const session = await getServerSession();
+  const routing = await getPublicRouting();
   const googleEnabled = Boolean(
     process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-  );
+  ) && !isPreviewDeployment();
 
   if (session?.user) {
     redirect("/");
   }
 
   const params = await searchParams;
-  const nextPath = params?.next?.startsWith("/") ? params.next : "/";
+  const nextPath = params?.next?.startsWith("/") ? params.next : routing.appHomePath;
 
   return (
     <>
@@ -70,6 +73,13 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
                 <code>https://app.slpcc63.com/api/auth/callback/google</code>
               </div>
             </div>
+            {isPreviewDeployment() ? (
+              <p>
+                Preview deployments stay on their Vercel URL, so Google sign-in
+                is hidden there unless you explicitly register that preview URL
+                in Google Cloud.
+              </p>
+            ) : null}
           </aside>
         </section>
       </main>

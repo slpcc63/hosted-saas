@@ -1,6 +1,7 @@
 import { SiteHeader } from "@/components/site-header";
 import { WorkspaceForm } from "@/components/workspace-form";
 import { requireSession } from "@/lib/auth/server";
+import { getPublicRouting } from "@/lib/request-routing";
 import { getWorkspaceByOwnerId } from "@/lib/workspaces";
 
 type DashboardPageProps = {
@@ -11,7 +12,8 @@ type DashboardPageProps = {
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const session = await requireSession("/dashboard");
+  const routing = await getPublicRouting();
+  const session = await requireSession(routing.dashboardPath);
   const workspace = await getWorkspaceByOwnerId(session.user.id);
   const params = await searchParams;
 
@@ -48,7 +50,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 {workspace?.onboardingIntent ?? "Add one below"}
               </div>
             </div>
-            <WorkspaceForm redirectTo="/dashboard" workspace={workspace} />
+            <WorkspaceForm redirectTo={routing.dashboardPath} workspace={workspace} />
           </section>
 
           <aside className="dashboard-card">
