@@ -110,3 +110,22 @@ The Google button appears only when both environment variables are present.
 - Better Auth protects the app routes
 - Neon stores auth data and the first `workspace_profiles` record for each user
 - signed-in users can create and edit their workspace from `/` and `/dashboard`
+- each workspace now has a first real workflow: create work items and move them through backlog, active, and done
+- each workspace can also connect a Square seller account through OAuth hosted by your app
+
+## Square integration baseline
+
+- the seller starts the Square connect flow from your hosted dashboard
+- Square shows the authorization screen on its own domain
+- Square redirects back to your hosted callback URL
+- your app exchanges the authorization code for tokens and stores the connection against the workspace
+
+Add these environment variables before testing Square OAuth:
+
+```text
+SQUARE_ENVIRONMENT=production
+SQUARE_APPLICATION_ID=...
+SQUARE_APPLICATION_SECRET=...
+SQUARE_REDIRECT_URI=https://app.slpcc63.com/api/integrations/square/callback
+SQUARE_SCOPES=MERCHANT_PROFILE_READ
+```

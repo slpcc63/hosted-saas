@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 
 import { SiteHeader } from "@/components/site-header";
+import { WorkItemForm } from "@/components/work-item-form";
+import { WorkItemList } from "@/components/work-item-list";
 import { WorkspaceForm } from "@/components/workspace-form";
 import { requireSession } from "@/lib/auth/server";
 import { getPublicRouting } from "@/lib/request-routing";
+import { getWorkItemsForWorkspace } from "@/lib/work-items";
 import { getWorkspaceByOwnerId } from "@/lib/workspaces";
 
 const rootDomain =
@@ -22,6 +25,9 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
   const workspace = await getWorkspaceByOwnerId(session.user.id);
   const params = await searchParams;
   const hasWorkspace = Boolean(workspace);
+  const workItems = workspace
+    ? await getWorkItemsForWorkspace(workspace.id)
+    : [];
 
   return (
     <>
@@ -39,8 +45,14 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             {params?.saved === "workspace" ? (
               <p className="form-success">Workspace saved successfully.</p>
             ) : null}
+            {params?.saved === "work_item" ? (
+              <p className="form-success">Work item saved successfully.</p>
+            ) : null}
             {params?.error === "workspace_name_required" ? (
               <p className="form-error">A workspace name is required before we can save it.</p>
+            ) : null}
+            {params?.error === "work_item_title_required" ? (
+              <p className="form-error">A work item title is required before saving.</p>
             ) : null}
             <div className="stat-row">
               <div className="stat">
@@ -52,11 +64,24 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
                 {workspace?.name ?? "Not created yet"}
               </div>
               <div className="stat">
-                <strong>Status</strong>
-                {hasWorkspace ? "Configured" : "Needs setup"}
+                <strong>Work items</strong>
+                {workItems.length}
               </div>
             </div>
             <WorkspaceForm redirectTo={routing.appHomePath} workspace={workspace} />
+            {workspace ? (
+              <>
+                <WorkItemForm
+                  redirectTo={routing.appHomePath}
+                  workspaceId={workspace.id}
+                />
+                <WorkItemList
+                  items={workItems}
+                  redirectTo={routing.appHomePath}
+                  workspaceId={workspace.id}
+                />
+              </>
+            ) : null}
           </section>
 
           <aside className="dashboard-card">
@@ -69,7 +94,7 @@ export default async function AppHomePage({ searchParams }: AppHomePageProps) {
             <ul className="checklist compact-list">
               <li>Auth is live with Better Auth.</li>
               <li>Workspace data is stored in Neon.</li>
-              <li>Billing and domain wiring are ready for the next pass.</li>
+              <li>Workspace-linked work items are now live.</li>
             </ul>
             {workspace ? (
               <div className="metric workspace-summary">
