@@ -1,0 +1,40 @@
+{
+  "name": "square-time-card-manager",
+  "version": "1.0.0",
+  "description": "Square time card management and notification plugin.",
+  "author": {
+    "name": "SLPCC63",
+    "email": "support@slpcc63.com",
+    "url": "https://slpcc63.com"
+  },
+  "homepage": "https://slpcc63.com",
+  "repository": "https://slpcc63.com",
+  "license": "UNLICENSED",
+  "keywords": [
+    "square",
+    "timecards",
+    "notifications",
+    "labor"
+  ],
+  "interface": {
+    "displayName": "Square Time Card Manager",
+    "shortDescription": "Current approved scope: Square-connected missed clock-out email and text workflows.",
+    "longDescription": "This plugin is currently scoped to approved Time Card Manager work only. The active customer-facing workflow centers on missed clock-out notifications tied to a Square connection and subscription-backed delivery settings.",
+    "developerName": "SLPCC63",
+    "category": "Operations",
+    "capabilities": [
+      "Square account connection",
+      "Manual open timecard scan",
+      "Missed clock-out notification workflow"
+    ],
+    "websiteURL": "https://slpcc63.com",
+    "privacyPolicyURL": "https://slpcc63.com/privacy",
+    "termsOfServiceURL": "https://slpcc63.com/terms",
+    "defaultPrompt": [
+      "Show the Square time card manager plugin.",
+      "Explain the currently approved phase 1 scope.",
+      "List the setup needs for the missed clock-out notification workflow."
+    ],
+    "brandColor": "#B65A35"
+  }
+}

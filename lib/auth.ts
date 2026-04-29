@@ -1,19 +1,19 @@
 import { betterAuth } from "better-auth";
 
 import { db } from "@/lib/db";
+import { getAppOrigin, getBetterAuthOrigin, getMarketingOrigin } from "@/lib/deployment";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000";
-const marketingUrl =
-  process.env.NEXT_PUBLIC_MARKETING_SITE_URL ?? "http://localhost:3000";
 const authSecret =
   process.env.BETTER_AUTH_SECRET ?? "slpcc63-local-dev-secret-change-before-prod";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const appUrl = getAppOrigin();
+const marketingUrl = getMarketingOrigin();
 
 export const auth = betterAuth({
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? "SLPCC63",
   secret: authSecret,
-  baseURL: process.env.BETTER_AUTH_URL ?? appUrl,
+  baseURL: getBetterAuthOrigin(),
   trustedOrigins: [appUrl, marketingUrl],
   database: db,
   emailAndPassword: {

@@ -1,7 +1,10 @@
 import { SiteHeader } from "@/components/site-header";
-import { WorkspaceForm } from "@/components/workspace-form";
 import { requireSession } from "@/lib/auth/server";
-import { getWorkspaceByOwnerId } from "@/lib/workspaces";
+import { isAdmin } from "@/lib/authorization";
+import { getOrCreateCustomerProfile } from "@/lib/customers";
+import { getPublicRouting } from "@/lib/request-routing";
+import { ensureSeedCatalog } from "@/lib/seed";
+import { getTimeCardManagerOverview } from "@/lib/square-time-card-manager";
 
 type DashboardPageProps = {
   searchParams?: Promise<{
@@ -11,58 +14,151 @@ type DashboardPageProps = {
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  const session = await requireSession("/dashboard");
-  const workspace = await getWorkspaceByOwnerId(session.user.id);
+  const routing = await getPublicRouting();
+  const session = await requireSession(routing.dashboardPath);
+  const customer = await getOrCreateCustomerProfile({
+    userId: session.user.id,
+    email: session.user.email,
+    companyName: session.user.name ?? session.user.email.split("@")[0] ?? "",
+    contactName: session.user.name ?? "",
+    status: "active"
+  });
+  await ensureSeedCatalog();
+  const admin = await isAdmin(session.user.id);
   const params = await searchParams;
+  const displayName = customer.contactName ?? customer.companyName ?? session.user.email;
+  const timeCardOverview = await getTimeCardManagerOverview(customer.id);
+  const timeCardPath = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
+  const subscriptionsPath = routing.appHost ? "/subscriptions" : "/app/subscriptions";
 
   return (
     <>
       <SiteHeader appMode />
       <main className="shell dashboard">
-        <div className="eyebrow">Internal App Shell</div>
+        <div className="eyebrow">Customer Dashboard</div>
         <div className="dashboard-grid">
           <section className="dashboard-card">
-            <h1>{workspace ? `${workspace.name} dashboard` : "Finish your workspace setup"}</h1>
+            <h1>{displayName} dashboard</h1>
             <p>
-              This is now backed by a real workspace record in Neon. Treat it as
-              the first durable app object we can hang permissions, billing, and
-              product workflows off of.
+              This dashboard is tied to your customer account, subscription
+              status, and current Time Card Manager setup.
             </p>
-            {params?.saved === "workspace" ? (
-              <p className="form-success">Workspace changes saved.</p>
+            {timeCardOverview.alertMessage ? (
+              <div className="dashboard-alert warning">
+                <strong>Time card texting paused</strong>
+                <p>{timeCardOverview.alertMessage}</p>
+                <a className="pill" href={subscriptionsPath}>
+                  Manage subscription
+                </a>
+              </div>
             ) : null}
-            {params?.error === "workspace_name_required" ? (
-              <p className="form-error">Please add a workspace name before saving.</p>
+            {params?.saved === "square_connection" ? (
+              <p className="form-success">Square connected successfully.</p>
+            ) : null}
+            {params?.error === "square_authorization_failed" ? (
+              <p className="form-error">Square authorization was cancelled or failed before the callback completed.</p>
+            ) : null}
+            {params?.error === "square_token_exchange_failed" ? (
+              <p className="form-error">Square returned a callback, but the token exchange failed.</p>
             ) : null}
             <div className="stat-row">
               <div className="stat">
-                <strong>Signed in</strong>
-                {session.user.email}
+                <strong>Account</strong>
+                {customer.email}
               </div>
               <div className="stat">
-                <strong>Slug</strong>
-                {workspace?.slug ?? "Pending"}
+                <strong>Subscriptions</strong>
+                {timeCardOverview.entitlement ? timeCardOverview.entitlement.packageName : "No time card plan yet"}
               </div>
               <div className="stat">
-                <strong>Focus</strong>
-                {workspace?.onboardingIntent ?? "Add one below"}
+                <strong>Billing</strong>
+                {timeCardOverview.currentUsage
+                  ? `${timeCardOverview.currentUsage.textsSentCount}/${timeCardOverview.entitlement?.monthlyTextLimit ?? 0} texts used`
+                  : "No text usage yet"}
               </div>
             </div>
-            <WorkspaceForm redirectTo="/dashboard" workspace={workspace} />
+            <div className="metric">
+              <strong>Customer Profile</strong>
+              Your account profile is the source of truth for billing, Square
+              access, and plugin settings.
+            </div>
+            <div className="stack-list">
+              <article className="dashboard-subcard">
+                <div className="subcard-header">
+                  <div>
+                    <h2>Square Time Card Manager</h2>
+                    <p>
+                      {timeCardOverview.entitlement
+                        ? `Configured mode: ${timeCardOverview.settings.notificationMode.replaceAll("_", " ")}`
+                        : "Subscribe first to unlock time card notification controls."}
+                    </p>
+                  </div>
+                  <span className="status-chip">
+                    {timeCardOverview.delivery.effectiveMode.replaceAll("_", " ")}
+                  </span>
+                </div>
+                {timeCardOverview.entitlement ? (
+                  <>
+                    <div className="stat-row compact">
+                      <div className="stat">
+                        <strong>Package</strong>
+                        {timeCardOverview.entitlement.packageName}
+                      </div>
+                      <div className="stat">
+                        <strong>Texts left</strong>
+                        {timeCardOverview.delivery.textsRemaining}
+                      </div>
+                      <div className="stat">
+                        <strong>Next run</strong>
+                        {timeCardOverview.nextRunLabel ?? "Automation off"}
+                      </div>
+                      <div className="stat">
+                        <strong>Email sender</strong>
+                        {timeCardOverview.senderProfile.fromEmail}
+                      </div>
+                    </div>
+                    <div className="subscription-actions">
+                      <a className="pill primary" href={timeCardPath}>
+                        Manage time card settings
+                      </a>
+                      <a className="pill" href={subscriptionsPath}>
+                        Manage subscription
+                      </a>
+                    </div>
+                  </>
+                ) : (
+                  <div className="subscription-actions">
+                    <a className="pill primary" href={subscriptionsPath}>
+                      Subscribe to Time Card Manager
+                    </a>
+                  </div>
+                )}
+              </article>
+            </div>
           </section>
 
           <aside className="dashboard-card">
-            <h2>What this unlocks next</h2>
+            <h2>Current focus</h2>
             <p>
-              With a user and workspace stored in the database, we now have the
-              two core anchors most SaaS products need before adding the first
-              real domain-specific workflow.
+              The current product work is focused on the Square Time Card
+              Manager. Anything not explicitly approved stays out of the
+              customer-facing offering until it is planned.
             </p>
             <ul className="checklist compact-list">
-              <li>Stripe customer creation can attach to the workspace.</li>
-              <li>Invites and team roles can hang off the workspace ID.</li>
-              <li>Your first customer-facing workflow can be keyed to the owner and workspace.</li>
+              <li>Customer settings are tied to the signed-in account.</li>
+              <li>Subscription details stay connected to the customer profile.</li>
+              <li>Square connection work is being aligned to the same ownership model.</li>
             </ul>
+            <div className="metric">
+              <strong>Customer ID</strong>
+              {customer.id}
+            </div>
+            {admin ? (
+              <div className="metric">
+                <strong>Admin Access</strong>
+                Your account can open internal admin product tools.
+              </div>
+            ) : null}
           </aside>
         </div>
       </main>
