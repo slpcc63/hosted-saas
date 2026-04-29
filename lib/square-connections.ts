@@ -1,11 +1,13 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { ensureCustomerProfilesTable } from "@/lib/customers";
 import { getSquareEnvironmentLabel } from "@/lib/square";
 
 export type SquareConnection = {
   accessToken: string;
   authorizedScopes: string[];
+  customerId: string;
   connectedAt: Date;
   expiresAt: Date | null;
   id: string;
@@ -13,7 +15,6 @@ export type SquareConnection = {
   refreshToken: string;
   squareEnvironment: string;
   updatedAt: Date;
-  workspaceId: string;
 };
 
 let squareConnectionsTableReady: Promise<void> | null = null;
@@ -29,7 +30,7 @@ function parseScopes(value: unknown) {
 function mapSquareConnection(row: Record<string, unknown>): SquareConnection {
   return {
     id: String(row.id),
-    workspaceId: String(row.workspace_id),
+    customerId: String(row.customer_id),
     merchantId: String(row.merchant_id),
     accessToken: String(row.access_token),
     refreshToken: String(row.refresh_token),
@@ -42,13 +43,15 @@ function mapSquareConnection(row: Record<string, unknown>): SquareConnection {
 }
 
 export async function ensureSquareConnectionsTable() {
+  await ensureCustomerProfilesTable();
+
   if (!squareConnectionsTableReady) {
     squareConnectionsTableReady = db.query(`
       create extension if not exists pgcrypto;
 
       create table if not exists public.square_connections (
         id uuid primary key default gen_random_uuid(),
-        workspace_id uuid not null unique references public.workspace_profiles(id) on delete cascade,
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
         merchant_id text not null,
         access_token text not null,
         refresh_token text not null,
@@ -58,22 +61,43 @@ export async function ensureSquareConnectionsTable() {
         connected_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       );
+
+      alter table public.square_connections
+        add column if not exists customer_id uuid references public.customer_profiles(id) on delete cascade;
+
+      do $$
+      begin
+        if exists (
+          select 1
+          from information_schema.columns
+          where table_schema = 'public'
+            and table_name = 'square_connections'
+            and column_name = 'workspace_id'
+        ) then
+          execute 'alter table public.square_connections alter column workspace_id drop not null';
+        end if;
+      end
+      $$;
+
+      create unique index if not exists square_connections_customer_id_idx
+        on public.square_connections(customer_id)
+        where customer_id is not null;
     `).then(() => undefined);
   }
 
   return squareConnectionsTableReady;
 }
 
-export async function getSquareConnectionByWorkspaceId(workspaceId: string) {
+export async function getSquareConnectionByCustomerId(customerId: string) {
   await ensureSquareConnectionsTable();
 
   const result = await db.query(
-    `select id, workspace_id, merchant_id, access_token, refresh_token, expires_at,
+    `select id, customer_id, merchant_id, access_token, refresh_token, expires_at,
             square_environment, authorized_scopes, connected_at, updated_at
      from public.square_connections
-     where workspace_id = $1
+     where customer_id = $1
      limit 1`,
-    [workspaceId]
+    [customerId]
   );
 
   if (!result.rows[0]) {
@@ -86,16 +110,16 @@ export async function getSquareConnectionByWorkspaceId(workspaceId: string) {
 export async function upsertSquareConnection(input: {
   accessToken: string;
   authorizedScopes: string[];
+  customerId: string;
   expiresAt?: string;
   merchantId: string;
   refreshToken: string;
-  workspaceId: string;
 }) {
   await ensureSquareConnectionsTable();
 
   const result = await db.query(
     `insert into public.square_connections (
-      workspace_id,
+      customer_id,
       merchant_id,
       access_token,
       refresh_token,
@@ -103,7 +127,7 @@ export async function upsertSquareConnection(input: {
       square_environment,
       authorized_scopes
     ) values ($1, $2, $3, $4, $5, $6, $7)
-    on conflict (workspace_id)
+    on conflict (customer_id)
     do update set
       merchant_id = excluded.merchant_id,
       access_token = excluded.access_token,
@@ -112,10 +136,10 @@ export async function upsertSquareConnection(input: {
       square_environment = excluded.square_environment,
       authorized_scopes = excluded.authorized_scopes,
       updated_at = now()
-    returning id, workspace_id, merchant_id, access_token, refresh_token, expires_at,
+    returning id, customer_id, merchant_id, access_token, refresh_token, expires_at,
               square_environment, authorized_scopes, connected_at, updated_at`,
     [
-      input.workspaceId,
+      input.customerId,
       input.merchantId,
       input.accessToken,
       input.refreshToken,
@@ -128,15 +152,15 @@ export async function upsertSquareConnection(input: {
   return mapSquareConnection(result.rows[0]);
 }
 
-export async function removeSquareConnection(workspaceId: string) {
+export async function removeSquareConnection(customerId: string) {
   await ensureSquareConnectionsTable();
 
   const result = await db.query(
     `delete from public.square_connections
-     where workspace_id = $1
-     returning id, workspace_id, merchant_id, access_token, refresh_token, expires_at,
+     where customer_id = $1
+     returning id, customer_id, merchant_id, access_token, refresh_token, expires_at,
               square_environment, authorized_scopes, connected_at, updated_at`,
-    [workspaceId]
+    [customerId]
   );
 
   if (!result.rows[0]) {

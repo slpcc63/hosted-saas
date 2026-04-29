@@ -24,7 +24,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   }
 
   const params = await searchParams;
-  const nextPath = params?.next?.startsWith("/") ? params.next : routing.appHomePath;
+  const nextPath = params?.next?.startsWith("/") ? params.next : routing.dashboardPath;
 
   return (
     <>
@@ -33,7 +33,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
         <section className="auth-grid">
           <article className="dashboard-card auth-card">
             <div className="eyebrow">App Sign-In</div>
-            <h1>Open the product workspace</h1>
+            <h1>Sign in to the customer app</h1>
             <p>
               Better Auth is now wired in for email/password authentication,
               and Google sign-in can be enabled from your environment settings.

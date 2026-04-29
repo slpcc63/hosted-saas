@@ -23,10 +23,10 @@ export async function getPublicRouting() {
 
   const appHomePath = appHost ? "/" : "/app";
   const dashboardPath = appHost ? "/dashboard" : "/app/dashboard";
-  const signInPath = `/sign-in?next=${encodeURIComponent(appHomePath)}`;
+  const signInPath = `/sign-in?next=${encodeURIComponent(dashboardPath)}`;
   const launchProductHref = preview
-    ? `/sign-in?next=${encodeURIComponent("/app")}`
-    : `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.slpcc63.com"}/sign-in?next=/`;
+    ? `/sign-in?next=${encodeURIComponent("/app/dashboard")}`
+    : `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.slpcc63.com"}/sign-in?next=/dashboard`;
   const marketingHref = preview || !appHost ? "/" : getMarketingOrigin();
 
   return {

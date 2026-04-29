@@ -44,9 +44,10 @@
 - set `DATABASE_URL` to Neon's connection string
 - use `DATABASE_URL_UNPOOLED` for migrations if you keep a separate direct URL
 
-## First app data model
+## Current app data model
 
-- `workspace_profiles` is the first product-owned table beyond auth
-- each authenticated user currently has one workspace profile
-- the workspace record is the anchor for the next layer of billing, invites,
-  and domain-specific workflows
+- `customer_profiles` is the main product-owned account table beyond auth
+- customer-linked tables should attach to `customer_profiles` unless there is a
+  clearly approved reason to introduce another ownership layer
+- unapproved offerings and speculative workflows should stay unpublished or in
+  backlog until they are explicitly planned

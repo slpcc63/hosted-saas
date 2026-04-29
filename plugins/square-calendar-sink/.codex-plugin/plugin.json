@@ -1,0 +1,34 @@
+{
+  "name": "square-calendar-sink",
+  "version": "1.0.0",
+  "description": "Square calendar sync plugin for schedule and shift sink workflows.",
+  "author": {
+    "name": "SLPCC63",
+    "email": "support@slpcc63.com",
+    "url": "https://slpcc63.com"
+  },
+  "homepage": "https://slpcc63.com",
+  "repository": "https://slpcc63.com",
+  "license": "UNLICENSED",
+  "keywords": [
+    "square",
+    "calendar",
+    "schedule",
+    "sync"
+  ],
+  "interface": {
+    "displayName": "Square Calendar Sink (Backlog)",
+    "shortDescription": "Backlog placeholder. Not an active customer offering.",
+    "longDescription": "This plugin remains in backlog only. It should not be presented as an active offer until the scope is reviewed and approved.",
+    "developerName": "SLPCC63",
+    "category": "Operations",
+    "capabilities": [],
+    "websiteURL": "https://slpcc63.com",
+    "privacyPolicyURL": "https://slpcc63.com/privacy",
+    "termsOfServiceURL": "https://slpcc63.com/terms",
+    "defaultPrompt": [
+      "Show the Square calendar sink backlog placeholder."
+    ],
+    "brandColor": "#2C6E63"
+  }
+}

@@ -22,3 +22,9 @@ export async function requireSession(nextPath: string) {
 
   return session;
 }
+
+export async function requireUserId(nextPath: string) {
+  const session = await requireSession(nextPath);
+
+  return session.user.id;
+}

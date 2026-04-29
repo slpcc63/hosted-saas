@@ -100,25 +100,48 @@ The Google button appears only when both environment variables are present.
 ## Suggested next implementation steps
 
 1. Point the app at your free Neon database.
-2. Use the built-in workspace setup flow to create your first workspace.
-3. Add Stripe billing and customer portal support.
-4. Add your first real customer data model.
-5. Attach both domains in Vercel and deploy.
+2. Add Stripe billing and customer portal support.
+3. Finalize the approved phase 1 scope for the Time Card Manager.
+4. Attach both domains in Vercel and deploy.
+
+## Stripe billing setup
+
+The repo now supports a first hosted Stripe flow for subscription checkout and
+billing portal access.
+
+1. Add `STRIPE_SECRET_KEY` to `.env.local`.
+2. Optionally add `STRIPE_PUBLISHABLE_KEY` if you want it available later for
+   frontend billing UI.
+3. In Stripe, create recurring prices with these lookup keys:
+
+   ```text
+   slpcc63_square_calendar_sync_starter_monthly
+   slpcc63_square_calendar_sync_growth_monthly
+   slpcc63_square_time_card_manager_operations_monthly
+   slpcc63_square_time_card_manager_scale_monthly
+   ```
+
+4. Make sure Billing Portal is enabled in your Stripe dashboard.
+5. Visit `/subscriptions` in the app and start a plan through hosted Checkout.
+
+For now, successful Checkout returns to the app and syncs the local
+subscription row using the Checkout session metadata.
 
 ## Current product baseline
 
 - Better Auth protects the app routes
-- Neon stores auth data and the first `workspace_profiles` record for each user
-- signed-in users can create and edit their workspace from `/` and `/dashboard`
-- each workspace now has a first real workflow: create work items and move them through backlog, active, and done
-- each workspace can also connect a Square seller account through OAuth hosted by your app
+- Neon stores auth data and customer-owned product records
+- signed-in users land in the customer dashboard and Time Card Manager screens
+- the current approved customer-facing product is the Square Time Card Manager
 
-## Square integration baseline
+## Square Time Card Manager baseline
 
 - the seller starts the Square connect flow from your hosted dashboard
 - Square shows the authorization screen on its own domain
 - Square redirects back to your hosted callback URL
-- your app exchanges the authorization code for tokens and stores the connection against the workspace
+- your app exchanges the authorization code for tokens and stores the Square connection against the customer account
+- the current approved workflow centers on missed clock-out notifications
+- additional offerings remain unpublished or in backlog until approved
 
 Add these environment variables before testing Square OAuth:
 
@@ -127,5 +150,5 @@ SQUARE_ENVIRONMENT=production
 SQUARE_APPLICATION_ID=...
 SQUARE_APPLICATION_SECRET=...
 SQUARE_REDIRECT_URI=https://app.slpcc63.com/api/integrations/square/callback
-SQUARE_SCOPES=MERCHANT_PROFILE_READ
+SQUARE_SCOPES=MERCHANT_PROFILE_READ TIMECARDS_READ EMPLOYEES_READ
 ```
