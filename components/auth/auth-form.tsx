@@ -1,8 +1,8 @@
 "use client";
 
+import type { FormEvent } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
 
@@ -12,24 +12,31 @@ type AuthFormProps = {
 };
 
 export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
-  const router = useRouter();
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-up");
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(formData: FormData) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const formData = new FormData(event.currentTarget);
     const email = String(formData.get("email") ?? "").trim().toLowerCase();
     const password = String(formData.get("password") ?? "");
     const name = String(formData.get("name") ?? "").trim();
 
     setError(null);
+    setStatusMessage(null);
 
     if (mode === "sign-up" && !name) {
       setError("Add your name so we can create the first account.");
       return;
     }
 
-    startTransition(async () => {
+    setIsSubmitting(true);
+    setStatusMessage(mode === "sign-up" ? "Creating your account..." : "Signing you in...");
+
+    try {
       const response =
         mode === "sign-up"
           ? await authClient.signUp.email({
@@ -46,12 +53,20 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
 
       if (response.error) {
         setError(response.error.message ?? "Authentication failed.");
+        setStatusMessage(null);
         return;
       }
 
-      router.push(nextPath);
-      router.refresh();
-    });
+      setStatusMessage(mode === "sign-up" ? "Account created. Redirecting..." : "Signed in. Redirecting...");
+      window.location.assign(nextPath);
+    } catch (authError) {
+      setError(
+        authError instanceof Error ? authError.message : "Authentication failed."
+      );
+      setStatusMessage(null);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -60,10 +75,12 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
         <>
           <button
             className="pill social-button"
-            disabled={isPending}
+            disabled={isSubmitting}
             onClick={() => {
               setError(null);
-              startTransition(async () => {
+              setStatusMessage("Redirecting to Google...");
+              setIsSubmitting(true);
+              void (async () => {
                 const response = await authClient.signIn.social({
                   provider: "google",
                   callbackURL: nextPath
@@ -71,6 +88,8 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
 
                 if (response.error) {
                   setError(response.error.message ?? "Google sign-in failed.");
+                  setStatusMessage(null);
+                  setIsSubmitting(false);
                 }
               });
             }}
@@ -87,36 +106,40 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
       <div className="auth-toggle">
         <button
           className={`pill-button auth-toggle-button${mode === "sign-up" ? " active" : ""}`}
-          onClick={() => setMode("sign-up")}
+          onClick={() => {
+            setMode("sign-up");
+            setError(null);
+            setStatusMessage(null);
+          }}
           type="button"
         >
           Create account
         </button>
         <button
           className={`pill-button auth-toggle-button${mode === "sign-in" ? " active" : ""}`}
-          onClick={() => setMode("sign-in")}
+          onClick={() => {
+            setMode("sign-in");
+            setError(null);
+            setStatusMessage(null);
+          }}
           type="button"
         >
           Sign in
         </button>
       </div>
 
-      <form
-        action={async (formData) => {
-          await handleSubmit(formData);
-        }}
-        className="auth-form"
-      >
+      <form className="auth-form" onSubmit={handleSubmit}>
         {mode === "sign-up" ? (
           <label className="field">
             <span>Name</span>
-            <input autoComplete="name" name="name" placeholder="Your name" required />
+            <input autoComplete="name" disabled={isSubmitting} name="name" placeholder="Your name" required />
           </label>
         ) : null}
         <label className="field">
           <span>Email</span>
           <input
             autoComplete="email"
+            disabled={isSubmitting}
             name="email"
             placeholder="you@slpcc63.com"
             type="email"
@@ -127,6 +150,7 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
           <span>Password</span>
           <input
             autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+            disabled={isSubmitting}
             minLength={8}
             name="password"
             placeholder="At least 8 characters"
@@ -134,9 +158,14 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
             required
           />
         </label>
+        {statusMessage ? (
+          <p aria-live="polite" className="form-success">
+            {statusMessage}
+          </p>
+        ) : null}
         {error ? <p className="form-error">{error}</p> : null}
-        <button className="pill primary auth-submit" disabled={isPending} type="submit">
-          {isPending
+        <button className="pill primary auth-submit" disabled={isSubmitting} type="submit">
+          {isSubmitting
             ? "Working..."
             : mode === "sign-up"
               ? "Create account"
@@ -149,7 +178,7 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
           ? "This will create the first real app user in the Better Auth database."
           : "Use the account you created here to access the protected app routes."}
       </p>
-      <Link className="pill" href="/dashboard">
+      <Link className="pill" href={nextPath}>
         Dashboard after sign-in
       </Link>
     </div>

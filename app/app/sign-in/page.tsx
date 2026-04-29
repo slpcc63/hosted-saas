@@ -20,7 +20,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
   ) && !isPreviewDeployment();
 
   if (session?.user) {
-    redirect("/");
+    redirect(routing.dashboardPath);
   }
 
   const params = await searchParams;
