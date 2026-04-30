@@ -94,7 +94,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </p>
                   </div>
                   <span className="status-chip">
-                    {timeCardOverview.delivery.effectiveMode.replaceAll("_", " ")}
+                    {timeCardOverview.textingLive
+                      ? timeCardOverview.delivery.effectiveMode.replaceAll("_", " ")
+                      : "email live"}
                   </span>
                 </div>
                 {timeCardOverview.entitlement ? (
@@ -110,7 +112,13 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                       </div>
                       <div className="stat">
                         <strong>Next run</strong>
-                        {timeCardOverview.nextRunLabel ?? "Automation off"}
+                        {timeCardOverview.nextRunLabel
+                          ? timeCardOverview.automationLive
+                            ? timeCardOverview.nextRunLabel
+                            : `${timeCardOverview.nextRunLabel} (planned)`
+                          : timeCardOverview.automationLive
+                            ? "Automation off"
+                            : "Planning only"}
                       </div>
                       <div className="stat">
                         <strong>Email sender</strong>

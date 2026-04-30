@@ -32,7 +32,11 @@ const defaultTimezone = "America/Los_Angeles";
 
 export type TimeCardNotificationMode = "email_only" | "text_only" | "email_and_text";
 export type TimeCardEffectiveMode = TimeCardNotificationMode;
-export type TimeCardBlockedReason = "texting_not_included" | "quota_exhausted" | null;
+export type TimeCardBlockedReason =
+  | "texting_not_included"
+  | "quota_exhausted"
+  | "provider_unavailable"
+  | null;
 
 export type TimeCardManagerSettings = {
   automationEnabled: boolean;
@@ -99,6 +103,7 @@ export type MissedClockOutCandidate = {
 
 export type TimeCardManagerOverview = {
   alertMessage: string | null;
+  automationLive: boolean;
   currentUsage: TimeCardManagerTextUsage | null;
   delivery: TimeCardDeliveryEvaluation;
   entitlement: TimeCardManagerEntitlement | null;
@@ -106,6 +111,7 @@ export type TimeCardManagerOverview = {
   scheduleEntries: TimeCardManagerScheduleEntry[];
   senderProfile: TimeCardManagerSenderProfile;
   settings: TimeCardManagerSettings;
+  textingLive: boolean;
 };
 
 export type TimeCardManagerSquareStatus = {
@@ -123,6 +129,14 @@ function getDefaultPluginInstallConfig() {
     notifyOnMissedClockOuts: true,
     reviewMode: "manager-inbox"
   };
+}
+
+export function isTimeCardManagerTextingLive() {
+  return process.env.TIME_CARD_TEXTING_LIVE === "true";
+}
+
+export function isTimeCardManagerAutomationLive() {
+  return process.env.TIME_CARD_AUTOMATION_LIVE === "true";
 }
 
 export function normalizeNotificationMode(value: string): TimeCardNotificationMode {
@@ -212,6 +226,10 @@ function buildAlertMessage(input: {
 
   if (input.delivery.textingBlockedReason === "quota_exhausted") {
     return "Text notifications are paused because your monthly text limit has been reached. Email notifications still run where enabled. Manage your subscription to restore texting.";
+  }
+
+  if (input.delivery.textingBlockedReason === "provider_unavailable") {
+    return "Text notifications are approved in your package, but the SMS provider is not active in phase 1 yet. Email notifications remain the live delivery path for now.";
   }
 
   if (input.delivery.textingBlockedReason === "texting_not_included") {
@@ -569,13 +587,16 @@ export async function evaluateTimeCardManagerDelivery(input: {
     entitlement
   });
   const requestedTextCount = input.requestedTextCount ?? 1;
+  const textingLive = isTimeCardManagerTextingLive();
   const textsRemaining = entitlement
     ? Math.max(entitlement.monthlyTextLimit - (usage?.textsSentCount ?? 0), 0)
     : 0;
 
   let textingBlockedReason: TimeCardBlockedReason = null;
 
-  if (configuredMode !== "email_only" && !entitlement?.textingEnabled) {
+  if (configuredMode !== "email_only" && !textingLive) {
+    textingBlockedReason = "provider_unavailable";
+  } else if (configuredMode !== "email_only" && !entitlement?.textingEnabled) {
     textingBlockedReason = "texting_not_included";
   } else if (configuredMode !== "email_only" && textsRemaining < requestedTextCount) {
     textingBlockedReason = "quota_exhausted";
@@ -643,6 +664,8 @@ export async function recordTimeCardManagerTextUsage(input: {
 }
 
 export async function getTimeCardManagerOverview(customerId: string) {
+  const automationLive = isTimeCardManagerAutomationLive();
+  const textingLive = isTimeCardManagerTextingLive();
   const [settings, scheduleEntries, subscription, delivery] = await Promise.all([
     getOrCreateTimeCardManagerSettings(customerId),
     getTimeCardManagerScheduleEntries(customerId),
@@ -666,9 +689,13 @@ export async function getTimeCardManagerOverview(customerId: string) {
     currentUsage,
     delivery,
     senderProfile,
+    textingLive,
+    automationLive,
     alertMessage: buildAlertMessage({ delivery }),
     nextRunLabel:
-      settings.automationEnabled ? buildNextRunLabel(scheduleEntries) : null
+      settings.automationEnabled || !automationLive
+        ? buildNextRunLabel(scheduleEntries)
+        : null
   } satisfies TimeCardManagerOverview;
 }
 

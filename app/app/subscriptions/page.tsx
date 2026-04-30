@@ -181,7 +181,7 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
                     {plan.productSlug === "square-time-card-manager" ? (
                       <p className="auth-helper">
                         {plan.textingEnabled
-                          ? `Includes text notifications with a ${plan.monthlyTextLimit} text monthly limit.`
+                          ? `Includes an approved SMS package with a ${plan.monthlyTextLimit} text monthly limit. Live SMS delivery still depends on provider activation.`
                           : "This package is currently positioned around the approved phase 1 scope."}
                       </p>
                     ) : null}

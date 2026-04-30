@@ -63,9 +63,10 @@ export default async function TimeCardManagerPage({
           <section className="dashboard-card">
             <h1>Notification controls</h1>
             <p>
-              Configure how often the time card manager runs and whether it uses
-              email, text, or both. Text delivery is still governed by your
-              subscribed package and monthly quota.
+              Phase 1 currently runs on live email notifications plus manual
+              Square scans. Approved SMS and automated scheduling stay visible
+              here as planned capabilities, but they are not active delivery
+              paths yet.
             </p>
             {overview.alertMessage ? (
               <div className="dashboard-alert warning">
@@ -78,6 +79,18 @@ export default async function TimeCardManagerPage({
             ) : null}
             {params?.saved === "settings" ? (
               <p className="form-success">Time card manager settings saved.</p>
+            ) : null}
+            {params?.saved === "settings_manual_only" ? (
+              <p className="form-success">
+                Email settings saved. Automated runs are still planning-only until
+                the background runner is connected.
+              </p>
+            ) : null}
+            {params?.saved === "settings_sms_pending" ? (
+              <p className="form-success">
+                Email settings saved. SMS remains approved but inactive until the
+                texting provider is connected.
+              </p>
             ) : null}
             {params?.saved === "schedule" ? (
               <p className="form-success">Schedule entry added.</p>
@@ -221,15 +234,20 @@ export default async function TimeCardManagerPage({
                       name="notificationMode"
                     >
                       <option value="email_only">Email only</option>
-                      <option value="text_only">
-                        Text only
+                      <option disabled={!overview.textingLive} value="text_only">
+                        Text only{!overview.textingLive ? " (coming soon)" : ""}
                       </option>
-                      <option value="email_and_text">
-                        Email and text
+                      <option disabled={!overview.textingLive} value="email_and_text">
+                        Email and text{!overview.textingLive ? " (coming soon)" : ""}
                       </option>
                     </select>
                   </label>
-                  {!overview.entitlement.textingEnabled ? (
+                  {!overview.textingLive ? (
+                    <p className="auth-helper">
+                      SMS is an approved follow-up capability, but phase 1 still sends through
+                      email only until the texting provider is configured.
+                    </p>
+                  ) : !overview.entitlement.textingEnabled ? (
                     <p className="auth-helper">
                       Your current package does not include texting, so any text-capable mode will
                       operate as email only until the subscription is upgraded.
@@ -238,11 +256,21 @@ export default async function TimeCardManagerPage({
                   <label className="checkbox-row">
                     <input
                       defaultChecked={overview.settings.automationEnabled}
+                      disabled={!overview.automationLive}
                       name="automationEnabled"
                       type="checkbox"
                     />
-                    <span>Enable automated runs</span>
+                    <span>
+                      Enable automated runs
+                      {!overview.automationLive ? " (coming soon)" : ""}
+                    </span>
                   </label>
+                  {!overview.automationLive ? (
+                    <p className="auth-helper">
+                      Automated runs are not active in phase 1 yet. You can still capture your
+                      preferred schedule below so the runner configuration is ready later.
+                    </p>
+                  ) : null}
                   <button className="pill primary pill-button" type="submit">
                     Save notification settings
                   </button>
@@ -410,13 +438,17 @@ export default async function TimeCardManagerPage({
                         <p>{overview.entitlement.packageName}</p>
                       </div>
                       <span className="status-chip">
-                        {overview.delivery.effectiveMode.replaceAll("_", " ")}
+                        {overview.textingLive
+                          ? overview.delivery.effectiveMode.replaceAll("_", " ")
+                          : "email live"}
                       </span>
                     </div>
                     <div className="stat-row compact">
                       <div className="stat">
                         <strong>Configured mode</strong>
-                        {overview.delivery.configuredMode.replaceAll("_", " ")}
+                        {overview.textingLive
+                          ? overview.delivery.configuredMode.replaceAll("_", " ")
+                          : "email only"}
                       </div>
                       <div className="stat">
                         <strong>Texts used</strong>
@@ -441,14 +473,15 @@ export default async function TimeCardManagerPage({
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
                       <div>
-                        <h2>Automation schedule</h2>
+                        <h2>Schedule planning</h2>
                         <p>
-                          Choose exactly when the time card manager should run.
-                          Each entry represents one automated run per week.
+                          Capture the weekly run times you want us to use once the
+                          background runner is connected. These entries are saved now,
+                          but they do not trigger automatic scans yet.
                         </p>
                       </div>
                       <span className="status-chip">
-                        {overview.scheduleEntries.length} scheduled
+                        {overview.scheduleEntries.length} planned
                       </span>
                     </div>
                     <form action={addTimeCardManagerScheduleEntryAction} className="auth-form">
@@ -472,7 +505,7 @@ export default async function TimeCardManagerPage({
                         <input defaultValue="America/Los_Angeles" name="timezone" />
                       </label>
                       <button className="pill pill-button" type="submit">
-                        Add scheduled run
+                        Save planned run
                       </button>
                     </form>
 
@@ -500,8 +533,8 @@ export default async function TimeCardManagerPage({
                       </div>
                     ) : (
                       <p className="auth-helper">
-                        No schedule entries yet. Add one or more explicit weekly runs to control
-                        how often automated notifications go out.
+                        No planned schedule entries yet. Add one or more weekly run times now so
+                        the automation runner can use them once it is enabled.
                       </p>
                     )}
                   </article>
@@ -511,15 +544,15 @@ export default async function TimeCardManagerPage({
           </section>
 
           <aside className="dashboard-card">
-            <h2>How limits work</h2>
+            <h2>Phase 1 status</h2>
             <ul className="checklist compact-list">
-              <li>Manual and automated text sends both count against the monthly quota.</li>
-              <li>Email remains available even when texting is disabled or capped.</li>
-              <li>Text quotas do not roll over into the next billing period.</li>
+              <li>Email delivery is live today.</li>
+              <li>SMS is approved, but still waiting on the texting provider setup.</li>
+              <li>Schedule entries are saved now, but automated runs are not live yet.</li>
             </ul>
             <div className="metric">
-              <strong>Next run</strong>
-              {overview.nextRunLabel ?? "Automation is currently off or unscheduled"}
+              <strong>Next planned run</strong>
+              {overview.nextRunLabel ?? "No planned automated run saved yet"}
             </div>
           </aside>
         </div>

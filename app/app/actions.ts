@@ -27,6 +27,8 @@ import { parseManagedSenderLocalPart } from "@/lib/email";
 import {
   addTimeCardManagerScheduleEntry,
   findMissedClockOutCandidatesForCustomer,
+  isTimeCardManagerAutomationLive,
+  isTimeCardManagerTextingLive,
   normalizeNotificationMode,
   removeTimeCardManagerScheduleEntry,
   sendTimeCardManagerMissedClockOutEmail,
@@ -272,17 +274,30 @@ export async function saveTimeCardManagerSettingsAction(formData: FormData) {
   const notificationMode = normalizeNotificationMode(
     String(formData.get("notificationMode") ?? "").trim()
   );
-  const automationEnabled = String(formData.get("automationEnabled") ?? "") === "on";
+  const textingLive = isTimeCardManagerTextingLive();
+  const automationLive = isTimeCardManagerAutomationLive();
+  const effectiveNotificationMode =
+    !textingLive && notificationMode !== "email_only"
+      ? "email_only"
+      : notificationMode;
+  const automationEnabled =
+    automationLive && String(formData.get("automationEnabled") ?? "") === "on";
 
   await upsertTimeCardManagerSettings({
     customerId: customer.id,
-    notificationMode,
+    notificationMode: effectiveNotificationMode,
     automationEnabled
   });
 
   revalidatePath("/app/time-card-manager");
   revalidatePath("/app/dashboard");
-  redirect(`${redirectTo}?saved=settings`);
+  const saveState =
+    !textingLive && notificationMode !== "email_only"
+      ? "settings_sms_pending"
+      : !automationLive
+        ? "settings_manual_only"
+        : "settings";
+  redirect(`${redirectTo}?saved=${saveState}`);
 }
 
 export async function addTimeCardManagerScheduleEntryAction(formData: FormData) {
