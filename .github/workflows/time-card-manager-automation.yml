@@ -1,0 +1,33 @@
+name: Time Card Manager Automation
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+
+jobs:
+  trigger-automation:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger production automation route
+        env:
+          AUTOMATION_URL: https://app.slpcc63.com/api/cron/time-card-manager
+          CRON_SECRET: ${{ secrets.TIME_CARD_AUTOMATION_CRON_SECRET }}
+        run: |
+          if [ -z "${CRON_SECRET}" ]; then
+            echo "Missing GitHub secret TIME_CARD_AUTOMATION_CRON_SECRET"
+            exit 1
+          fi
+
+          response=$(curl -sS -w "\n%{http_code}" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            "${AUTOMATION_URL}")
+          body=$(printf '%s\n' "${response}" | sed '$d')
+          status=$(printf '%s\n' "${response}" | tail -n 1)
+
+          echo "${body}"
+
+          if [ "${status}" -lt 200 ] || [ "${status}" -ge 300 ]; then
+            echo "Automation request failed with HTTP ${status}"
+            exit 1
+          fi

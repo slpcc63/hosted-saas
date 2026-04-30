@@ -63,10 +63,10 @@ export default async function TimeCardManagerPage({
           <section className="dashboard-card">
             <h1>Notification controls</h1>
             <p>
-              Phase 1 currently runs on live email notifications plus manual
-              Square scans. Approved SMS and automated scheduling stay visible
-              here as planned capabilities, but they are not active delivery
-              paths yet.
+              Phase 1 currently runs on live email notifications, manual Square
+              scans, and scheduled automation when cron is enabled in
+              production. Approved SMS stays visible here, but it is not active
+              until the texting provider is connected.
             </p>
             {overview.alertMessage ? (
               <div className="dashboard-alert warning">
@@ -82,8 +82,8 @@ export default async function TimeCardManagerPage({
             ) : null}
             {params?.saved === "settings_manual_only" ? (
               <p className="form-success">
-                Email settings saved. Automated runs are still planning-only until
-                the background runner is connected.
+                Email settings saved. Automated runs will stay off until cron is
+                enabled in the deployment environment.
               </p>
             ) : null}
             {params?.saved === "settings_sms_pending" ? (
@@ -267,8 +267,9 @@ export default async function TimeCardManagerPage({
                   </label>
                   {!overview.automationLive ? (
                     <p className="auth-helper">
-                      Automated runs are not active in phase 1 yet. You can still capture your
-                      preferred schedule below so the runner configuration is ready later.
+                      Automated runs are wired in-app, but they will stay off until
+                      `CRON_SECRET` is configured in Vercel and the scheduled GitHub
+                      Actions workflow is allowed to call this app.
                     </p>
                   ) : null}
                   <button className="pill primary pill-button" type="submit">
@@ -473,15 +474,14 @@ export default async function TimeCardManagerPage({
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
                       <div>
-                        <h2>Schedule planning</h2>
+                        <h2>Automation schedule</h2>
                         <p>
-                          Capture the weekly run times you want us to use once the
-                          background runner is connected. These entries are saved now,
-                          but they do not trigger automatic scans yet.
+                          Choose exactly when the time card manager should run.
+                          Each saved entry becomes one weekly automation window.
                         </p>
                       </div>
                       <span className="status-chip">
-                        {overview.scheduleEntries.length} planned
+                        {overview.scheduleEntries.length} scheduled
                       </span>
                     </div>
                     <form action={addTimeCardManagerScheduleEntryAction} className="auth-form">
@@ -505,7 +505,7 @@ export default async function TimeCardManagerPage({
                         <input defaultValue="America/Los_Angeles" name="timezone" />
                       </label>
                       <button className="pill pill-button" type="submit">
-                        Save planned run
+                        Add scheduled run
                       </button>
                     </form>
 
@@ -533,8 +533,8 @@ export default async function TimeCardManagerPage({
                       </div>
                     ) : (
                       <p className="auth-helper">
-                        No planned schedule entries yet. Add one or more weekly run times now so
-                        the automation runner can use them once it is enabled.
+                        No schedule entries yet. Add one or more weekly runs to tell the
+                        automation job when to scan Square.
                       </p>
                     )}
                   </article>
@@ -548,11 +548,14 @@ export default async function TimeCardManagerPage({
             <ul className="checklist compact-list">
               <li>Email delivery is live today.</li>
               <li>SMS is approved, but still waiting on the texting provider setup.</li>
-              <li>Schedule entries are saved now, but automated runs are not live yet.</li>
+              <li>
+                Automation runs are available once the production deployment has
+                `CRON_SECRET` configured and the GitHub Actions scheduler secret is set.
+              </li>
             </ul>
             <div className="metric">
-              <strong>Next planned run</strong>
-              {overview.nextRunLabel ?? "No planned automated run saved yet"}
+              <strong>Next run</strong>
+              {overview.nextRunLabel ?? "No automated run scheduled yet"}
             </div>
           </aside>
         </div>

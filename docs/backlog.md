@@ -11,7 +11,6 @@ Items listed here are not approved customer-facing offerings yet.
 ## Time Card Manager backlog
 
 - SMS delivery
-- Automated scheduled runs
 - Additional reporting
 - CSV exports
 - Role filtering

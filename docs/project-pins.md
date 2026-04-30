@@ -23,16 +23,18 @@ them back up quickly.
   manual Time Card Manager test email plus a missed clock-out alert email
   through the configured managed sender. The app can also scan live Square open
   timecards and send missed clock-out alerts when the existing Square
-  connection includes `TIMECARDS_READ` and `EMPLOYEES_READ`. SMS still needs a
-  provider, and scheduled runs are not yet hooked into a background job.
+  connection includes `TIMECARDS_READ` and `EMPLOYEES_READ`. Scheduled runs are
+  now wired through a protected automation route plus a 15-minute GitHub
+  Actions workflow with duplicate-run and duplicate-alert protection. SMS still
+  needs a provider.
 - What is needed from Shannon:
   - Which email provider should send these notifications
   - Which texting provider should send SMS
-  - Whether scheduled runs should use Vercel cron, workflow jobs, or another
-    runner
+  - Add `CRON_SECRET` in Vercel if it is not already present
+  - Add the matching GitHub secret `TIME_CARD_AUTOMATION_CRON_SECRET`
 - Next step when resumed:
-  Move from manual live scans to automated Square-backed detection runs, then
-  connect SMS and scheduled runs to the chosen automation/runtime path.
+  Verify the production scheduler runs against a real Square-connected customer,
+  then connect SMS to the chosen provider.
 
 ### 2. Stripe live billing activation
 

@@ -119,9 +119,38 @@ export type TimeCardManagerSquareStatus = {
   missingScopes: string[];
 };
 
+export type TimeCardManagerAutomationRun = {
+  alertsSentCount: number;
+  candidateCount: number;
+  createdAt: Date;
+  customerId: string;
+  errorMessage: string | null;
+  id: string;
+  scheduleEntryId: string;
+  status: string;
+  updatedAt: Date;
+  windowStartedAt: Date;
+};
+
+export type TimeCardManagerAutomationBatchResult = {
+  alertsSentCount: number;
+  customersProcessed: number;
+  dueEntries: number;
+  now: string;
+  runs: Array<{
+    alertsSentCount: number;
+    customerId: string;
+    errorMessage: string | null;
+    scheduleEntryId: string;
+    status: string;
+  }>;
+};
+
 let timeCardManagerSettingsTableReady: Promise<void> | null = null;
 let timeCardManagerScheduleTableReady: Promise<void> | null = null;
 let timeCardManagerUsageTableReady: Promise<void> | null = null;
+let timeCardManagerAutomationRunsTableReady: Promise<void> | null = null;
+let timeCardManagerAlertLogTableReady: Promise<void> | null = null;
 
 function getDefaultPluginInstallConfig() {
   return {
@@ -136,7 +165,27 @@ export function isTimeCardManagerTextingLive() {
 }
 
 export function isTimeCardManagerAutomationLive() {
-  return process.env.TIME_CARD_AUTOMATION_LIVE === "true";
+  return Boolean(process.env.CRON_SECRET) && process.env.TIME_CARD_AUTOMATION_LIVE !== "false";
+}
+
+export function getTimeCardManagerAutomationWindowMinutes() {
+  const parsed = Number(process.env.TIME_CARD_AUTOMATION_WINDOW_MINUTES ?? 15);
+
+  if (Number.isNaN(parsed) || parsed < 5 || parsed > 60) {
+    return 15;
+  }
+
+  return parsed;
+}
+
+export function getTimeCardManagerAutomationThresholdHours() {
+  const parsed = Number(process.env.TIME_CARD_AUTOMATION_THRESHOLD_HOURS ?? 12);
+
+  if (Number.isNaN(parsed) || parsed < 1 || parsed > 24) {
+    return 12;
+  }
+
+  return parsed;
 }
 
 export function normalizeNotificationMode(value: string): TimeCardNotificationMode {
@@ -312,6 +361,103 @@ function formatTimeLabel(date: Date) {
   }).format(date);
 }
 
+function mapAutomationRun(row: Record<string, unknown>): TimeCardManagerAutomationRun {
+  return {
+    id: String(row.id),
+    customerId: String(row.customer_id),
+    scheduleEntryId: String(row.schedule_entry_id),
+    windowStartedAt: new Date(String(row.window_started_at)),
+    status: String(row.status),
+    candidateCount: Number(row.candidate_count ?? 0),
+    alertsSentCount: Number(row.alerts_sent_count ?? 0),
+    errorMessage:
+      typeof row.error_message === "string" ? row.error_message : null,
+    createdAt: new Date(String(row.created_at)),
+    updatedAt: new Date(String(row.updated_at))
+  };
+}
+
+function getScheduleMinuteOfDay(runTimeLocal: string) {
+  const [hour, minute] = runTimeLocal.split(":").map((value) => Number(value));
+
+  if (
+    Number.isNaN(hour) ||
+    Number.isNaN(minute) ||
+    hour < 0 ||
+    hour > 23 ||
+    minute < 0 ||
+    minute > 59
+  ) {
+    throw new Error(`Invalid run time: ${runTimeLocal}`);
+  }
+
+  return hour * 60 + minute;
+}
+
+const weekdayIndexByLabel = new Map([
+  ["Sun", 0],
+  ["Mon", 1],
+  ["Tue", 2],
+  ["Wed", 3],
+  ["Thu", 4],
+  ["Fri", 5],
+  ["Sat", 6]
+]);
+
+function getMinuteOfWeekInTimezone(date: Date, timezone: string) {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  });
+  const parts = formatter.formatToParts(date);
+  const weekdayLabel = parts.find((part) => part.type === "weekday")?.value ?? "Sun";
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? "0");
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? "0");
+  const weekday = weekdayIndexByLabel.get(weekdayLabel) ?? 0;
+
+  return weekday * 24 * 60 + hour * 60 + minute;
+}
+
+function getScheduledMinuteOfWeek(entry: Pick<TimeCardManagerScheduleEntry, "dayOfWeek" | "runTimeLocal">) {
+  return entry.dayOfWeek * 24 * 60 + getScheduleMinuteOfDay(entry.runTimeLocal);
+}
+
+function isScheduleEntryDueInWindow(input: {
+  entry: Pick<TimeCardManagerScheduleEntry, "dayOfWeek" | "runTimeLocal" | "timezone">;
+  now: Date;
+  windowMinutes: number;
+}) {
+  const currentMinuteOfWeek = getMinuteOfWeekInTimezone(input.now, input.entry.timezone);
+  const previousMinuteOfWeek = getMinuteOfWeekInTimezone(
+    new Date(input.now.getTime() - input.windowMinutes * 60 * 1000),
+    input.entry.timezone
+  );
+  const scheduledMinuteOfWeek = getScheduledMinuteOfWeek(input.entry);
+
+  if (previousMinuteOfWeek <= currentMinuteOfWeek) {
+    return (
+      scheduledMinuteOfWeek > previousMinuteOfWeek &&
+      scheduledMinuteOfWeek <= currentMinuteOfWeek
+    );
+  }
+
+  return (
+    scheduledMinuteOfWeek > previousMinuteOfWeek ||
+    scheduledMinuteOfWeek <= currentMinuteOfWeek
+  );
+}
+
+function getAutomationWindowStartedAt(now: Date, windowMinutes: number) {
+  const bucketStartMinutes = Math.floor(now.getUTCMinutes() / windowMinutes) * windowMinutes;
+  const windowStartedAt = new Date(now);
+  windowStartedAt.setUTCSeconds(0, 0);
+  windowStartedAt.setUTCMinutes(bucketStartMinutes);
+  return windowStartedAt;
+}
+
 function buildTeamMemberName(input: { family_name?: string; given_name?: string; reference_id?: string }) {
   const fullName = [input.given_name?.trim(), input.family_name?.trim()].filter(Boolean).join(" ");
 
@@ -405,6 +551,54 @@ export async function ensureTimeCardManagerUsageTable() {
   }
 
   return timeCardManagerUsageTableReady;
+}
+
+export async function ensureTimeCardManagerAutomationRunsTable() {
+  await ensureCustomerProfilesTable();
+  await ensureTimeCardManagerScheduleTable();
+
+  if (!timeCardManagerAutomationRunsTableReady) {
+    timeCardManagerAutomationRunsTableReady = db.query(`
+      create extension if not exists pgcrypto;
+
+      create table if not exists public.square_time_card_manager_automation_runs (
+        id uuid primary key default gen_random_uuid(),
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        schedule_entry_id uuid not null references public.square_time_card_manager_schedule_entries(id) on delete cascade,
+        window_started_at timestamptz not null,
+        status text not null default 'started',
+        candidate_count integer not null default 0,
+        alerts_sent_count integer not null default 0,
+        error_message text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        unique (schedule_entry_id, window_started_at)
+      );
+    `).then(() => undefined);
+  }
+
+  return timeCardManagerAutomationRunsTableReady;
+}
+
+export async function ensureTimeCardManagerAlertLogTable() {
+  await ensureCustomerProfilesTable();
+
+  if (!timeCardManagerAlertLogTableReady) {
+    timeCardManagerAlertLogTableReady = db.query(`
+      create extension if not exists pgcrypto;
+
+      create table if not exists public.square_time_card_manager_alert_log (
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        timecard_id text not null,
+        first_alerted_at timestamptz not null default now(),
+        last_alerted_at timestamptz not null default now(),
+        alert_count integer not null default 1,
+        primary key (customer_id, timecard_id)
+      );
+    `).then(() => undefined);
+  }
+
+  return timeCardManagerAlertLogTableReady;
 }
 
 export async function getTimeCardManagerSettings(customerId: string) {
@@ -697,6 +891,308 @@ export async function getTimeCardManagerOverview(customerId: string) {
         ? buildNextRunLabel(scheduleEntries)
         : null
   } satisfies TimeCardManagerOverview;
+}
+
+async function beginTimeCardManagerAutomationRun(input: {
+  customerId: string;
+  scheduleEntryId: string;
+  windowStartedAt: Date;
+}) {
+  await ensureTimeCardManagerAutomationRunsTable();
+
+  const result = await db.query(
+    `insert into public.square_time_card_manager_automation_runs (
+      customer_id,
+      schedule_entry_id,
+      window_started_at,
+      status
+    ) values ($1, $2, $3, 'started')
+    on conflict (schedule_entry_id, window_started_at)
+    do nothing
+    returning id, customer_id, schedule_entry_id, window_started_at, status, candidate_count, alerts_sent_count, error_message, created_at, updated_at`,
+    [input.customerId, input.scheduleEntryId, input.windowStartedAt.toISOString()]
+  );
+
+  if (!result.rows[0]) {
+    return null;
+  }
+
+  return mapAutomationRun(result.rows[0]);
+}
+
+async function finalizeTimeCardManagerAutomationRun(input: {
+  alertsSentCount: number;
+  candidateCount: number;
+  errorMessage?: string | null;
+  runId: string;
+  status: string;
+}) {
+  await ensureTimeCardManagerAutomationRunsTable();
+
+  const result = await db.query(
+    `update public.square_time_card_manager_automation_runs
+     set
+       status = $2,
+       candidate_count = $3,
+       alerts_sent_count = $4,
+       error_message = $5,
+       updated_at = now()
+     where id = $1
+     returning id, customer_id, schedule_entry_id, window_started_at, status, candidate_count, alerts_sent_count, error_message, created_at, updated_at`,
+    [
+      input.runId,
+      input.status,
+      input.candidateCount,
+      input.alertsSentCount,
+      input.errorMessage ?? null
+    ]
+  );
+
+  return mapAutomationRun(result.rows[0]);
+}
+
+async function getAlertedTimecardIds(input: {
+  customerId: string;
+  timecardIds: string[];
+}) {
+  await ensureTimeCardManagerAlertLogTable();
+
+  if (!input.timecardIds.length) {
+    return new Set<string>();
+  }
+
+  const result = await db.query(
+    `select timecard_id
+     from public.square_time_card_manager_alert_log
+     where customer_id = $1
+       and timecard_id = any($2::text[])`,
+    [input.customerId, input.timecardIds]
+  );
+
+  return new Set(result.rows.map((row) => String(row.timecard_id)));
+}
+
+async function recordAlertedTimecards(input: {
+  customerId: string;
+  timecardIds: string[];
+}) {
+  await ensureTimeCardManagerAlertLogTable();
+
+  for (const timecardId of input.timecardIds) {
+    await db.query(
+      `insert into public.square_time_card_manager_alert_log (
+        customer_id,
+        timecard_id,
+        first_alerted_at,
+        last_alerted_at,
+        alert_count
+      ) values ($1, $2, now(), now(), 1)
+      on conflict (customer_id, timecard_id)
+      do update set
+        last_alerted_at = now(),
+        alert_count = public.square_time_card_manager_alert_log.alert_count + 1`,
+      [input.customerId, timecardId]
+    );
+  }
+}
+
+async function getAutomationDueEntries(now: Date) {
+  await ensureTimeCardManagerSettingsTable();
+  await ensureTimeCardManagerScheduleTable();
+
+  const result = await db.query(
+    `select
+       schedules.id,
+       schedules.customer_id,
+       schedules.day_of_week,
+       schedules.run_time_local,
+       schedules.timezone,
+       schedules.enabled,
+       schedules.created_at,
+       schedules.updated_at,
+       customers.email,
+       customers.company_name,
+       customers.contact_name
+     from public.square_time_card_manager_schedule_entries schedules
+     inner join public.square_time_card_manager_settings settings
+       on settings.customer_id = schedules.customer_id
+     inner join public.customer_profiles customers
+       on customers.id = schedules.customer_id
+     where schedules.enabled = true
+       and settings.automation_enabled = true`
+  );
+
+  const windowMinutes = getTimeCardManagerAutomationWindowMinutes();
+
+  return result.rows
+    .map((row) => ({
+      scheduleEntry: mapScheduleEntry(row),
+      customer: {
+        id: String(row.customer_id),
+        email: String(row.email),
+        companyName:
+          typeof row.company_name === "string" ? row.company_name : null,
+        contactName:
+          typeof row.contact_name === "string" ? row.contact_name : null
+      }
+    }))
+    .filter(({ scheduleEntry }) =>
+      isScheduleEntryDueInWindow({
+        entry: scheduleEntry,
+        now,
+        windowMinutes
+      })
+    );
+}
+
+export async function runTimeCardManagerAutomationBatch(input?: {
+  now?: Date;
+}) {
+  const now = input?.now ?? new Date();
+  const windowStartedAt = getAutomationWindowStartedAt(
+    now,
+    getTimeCardManagerAutomationWindowMinutes()
+  );
+  const thresholdHours = getTimeCardManagerAutomationThresholdHours();
+  const dueEntries = await getAutomationDueEntries(now);
+  const runs: TimeCardManagerAutomationBatchResult["runs"] = [];
+  let alertsSentCount = 0;
+
+  for (const entry of dueEntries) {
+    const startedRun = await beginTimeCardManagerAutomationRun({
+      customerId: entry.customer.id,
+      scheduleEntryId: entry.scheduleEntry.id,
+      windowStartedAt
+    });
+
+    if (!startedRun) {
+      runs.push({
+        customerId: entry.customer.id,
+        scheduleEntryId: entry.scheduleEntry.id,
+        status: "already_processed",
+        alertsSentCount: 0,
+        errorMessage: null
+      });
+      continue;
+    }
+
+    try {
+      const overview = await getTimeCardManagerOverview(entry.customer.id);
+
+      if (!overview.entitlement) {
+        await finalizeTimeCardManagerAutomationRun({
+          runId: startedRun.id,
+          status: "skipped_no_subscription",
+          candidateCount: 0,
+          alertsSentCount: 0
+        });
+        runs.push({
+          customerId: entry.customer.id,
+          scheduleEntryId: entry.scheduleEntry.id,
+          status: "skipped_no_subscription",
+          alertsSentCount: 0,
+          errorMessage: null
+        });
+        continue;
+      }
+
+      if (!overview.delivery.canSendEmail) {
+        await finalizeTimeCardManagerAutomationRun({
+          runId: startedRun.id,
+          status: "skipped_email_disabled",
+          candidateCount: 0,
+          alertsSentCount: 0
+        });
+        runs.push({
+          customerId: entry.customer.id,
+          scheduleEntryId: entry.scheduleEntry.id,
+          status: "skipped_email_disabled",
+          alertsSentCount: 0,
+          errorMessage: null
+        });
+        continue;
+      }
+
+      const candidates = await findMissedClockOutCandidatesForCustomer({
+        customerId: entry.customer.id,
+        thresholdHours
+      });
+      const alertedTimecardIds = await getAlertedTimecardIds({
+        customerId: entry.customer.id,
+        timecardIds: candidates.map((candidate) => candidate.timecardId)
+      });
+      const unsentCandidates = candidates.filter(
+        (candidate) => !alertedTimecardIds.has(candidate.timecardId)
+      );
+
+      for (const candidate of unsentCandidates) {
+        await sendTimeCardManagerMissedClockOutEmail({
+          customer: entry.customer,
+          employeeName: candidate.teamMemberName,
+          shiftDate: candidate.shiftDateLabel,
+          clockInTime: candidate.clockInTimeLabel,
+          locationName: candidate.locationName ?? undefined
+        });
+      }
+
+      if (unsentCandidates.length) {
+        await recordAlertedTimecards({
+          customerId: entry.customer.id,
+          timecardIds: unsentCandidates.map((candidate) => candidate.timecardId)
+        });
+      }
+
+      const status =
+        candidates.length === 0
+          ? "no_candidates"
+          : unsentCandidates.length === 0
+            ? "already_alerted"
+            : "alerts_sent";
+
+      await finalizeTimeCardManagerAutomationRun({
+        runId: startedRun.id,
+        status,
+        candidateCount: candidates.length,
+        alertsSentCount: unsentCandidates.length
+      });
+
+      alertsSentCount += unsentCandidates.length;
+      runs.push({
+        customerId: entry.customer.id,
+        scheduleEntryId: entry.scheduleEntry.id,
+        status,
+        alertsSentCount: unsentCandidates.length,
+        errorMessage: null
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Automation run failed";
+
+      await finalizeTimeCardManagerAutomationRun({
+        runId: startedRun.id,
+        status: "failed",
+        candidateCount: 0,
+        alertsSentCount: 0,
+        errorMessage: message
+      });
+
+      runs.push({
+        customerId: entry.customer.id,
+        scheduleEntryId: entry.scheduleEntry.id,
+        status: "failed",
+        alertsSentCount: 0,
+        errorMessage: message
+      });
+    }
+  }
+
+  return {
+    now: now.toISOString(),
+    dueEntries: dueEntries.length,
+    customersProcessed: new Set(dueEntries.map((entry) => entry.customer.id)).size,
+    alertsSentCount,
+    runs
+  } satisfies TimeCardManagerAutomationBatchResult;
 }
 
 export async function sendTimeCardManagerTestEmail(input: {

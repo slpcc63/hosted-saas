@@ -152,3 +152,45 @@ SQUARE_APPLICATION_SECRET=...
 SQUARE_REDIRECT_URI=https://app.slpcc63.com/api/integrations/square/callback
 SQUARE_SCOPES=MERCHANT_PROFILE_READ TIMECARDS_READ EMPLOYEES_READ
 ```
+
+## Time Card Manager automation
+
+Time Card Manager automation is now wired for production through a protected app
+route plus a scheduled GitHub Actions workflow.
+
+1. Add these environment variables in Vercel and locally:
+
+   ```text
+   CRON_SECRET=replace-with-a-long-random-secret
+   TIME_CARD_AUTOMATION_LIVE=true
+   TIME_CARD_AUTOMATION_WINDOW_MINUTES=15
+   TIME_CARD_AUTOMATION_THRESHOLD_HOURS=12
+   ```
+
+2. Add this GitHub Actions secret in the `slpcc63/hosted-saas` repo:
+
+   ```text
+   TIME_CARD_AUTOMATION_CRON_SECRET=<same value as CRON_SECRET>
+   ```
+
+3. The workflow at `.github/workflows/time-card-manager-automation.yml` runs
+   every 15 minutes and calls:
+
+   ```text
+   https://app.slpcc63.com/api/cron/time-card-manager
+   ```
+
+4. The automation route checks for schedule entries whose
+   local weekday and time fall inside that window.
+5. Each schedule window is deduplicated so the same saved run only executes
+   once per cron window.
+6. Missed clock-out alerts are also deduplicated per Square timecard so the
+   same open timecard is not emailed repeatedly on later runs.
+
+Important notes:
+
+- The scheduler calls the production app only; preview deployments do not run automation.
+- Vercel Hobby blocks sub-daily platform cron jobs, which is why this project
+  uses GitHub Actions as the runner.
+- If you later upgrade Vercel and want platform-native cron, the route can be
+  reused without changing the automation engine.

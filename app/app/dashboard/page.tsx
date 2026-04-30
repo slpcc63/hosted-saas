@@ -115,10 +115,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                         {timeCardOverview.nextRunLabel
                           ? timeCardOverview.automationLive
                             ? timeCardOverview.nextRunLabel
-                            : `${timeCardOverview.nextRunLabel} (planned)`
+                            : `${timeCardOverview.nextRunLabel} (cron setup needed)`
                           : timeCardOverview.automationLive
                             ? "Automation off"
-                            : "Planning only"}
+                            : "Cron setup needed"}
                       </div>
                       <div className="stat">
                         <strong>Email sender</strong>
