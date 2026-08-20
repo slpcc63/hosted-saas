@@ -97,9 +97,12 @@ export async function GET(request: NextRequest) {
     status: "active"
   });
 
+  let callbackStage = "token_exchange";
+
   try {
     const tokenResponse = await exchangeSquareAuthorizationCode(code);
 
+    callbackStage = "connection_storage";
     await upsertSquareConnection({
       customerId: customer.id,
       merchantId: tokenResponse.merchant_id,
@@ -109,6 +112,7 @@ export async function GET(request: NextRequest) {
       authorizedScopes: tokenResponse.scopes ?? []
     });
 
+    callbackStage = "plugin_installation";
     await installSquarePlugin(storedState.pluginId, customer.id);
 
     const response = NextResponse.redirect(
@@ -120,7 +124,13 @@ export async function GET(request: NextRequest) {
 
     response.cookies.delete(stateCookieName);
     return response;
-  } catch {
+  } catch (error) {
+    console.error("[square-oauth] callback failed", {
+      error: error instanceof Error ? error.message : String(error),
+      pluginId: storedState.pluginId,
+      stage: callbackStage
+    });
+
     const response = NextResponse.redirect(
       new URL(
         `${getPluginRedirectPath(storedState.pluginId, routing.appHost)}?error=square_token_exchange_failed`,

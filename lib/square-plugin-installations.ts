@@ -145,7 +145,7 @@ export async function upsertSquarePluginInstallation(input: {
       plugin_id,
       config
     ) values ($1, $2, $3::jsonb)
-    on conflict (customer_id, plugin_id)
+    on conflict (customer_id, plugin_id) where customer_id is not null
     do update set
       config = excluded.config,
       updated_at = now()

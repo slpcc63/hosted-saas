@@ -322,13 +322,41 @@ export async function exchangeSquareAuthorizationCode(code: string) {
     throw new Error(`Square token exchange failed: ${errorText}`);
   }
 
-  return response.json() as Promise<{
+  const tokenResponse = await response.json() as {
     access_token: string;
     expires_at?: string;
     merchant_id: string;
     refresh_token: string;
     scopes?: string[];
     token_type: string;
+  };
+  const tokenStatus = await retrieveSquareTokenStatus(tokenResponse.access_token);
+
+  return {
+    ...tokenResponse,
+    scopes: tokenStatus.scopes ?? []
+  };
+}
+
+export async function retrieveSquareTokenStatus(accessToken: string) {
+  const response = await fetch(`${getSquareBaseUrl()}/oauth2/token/status`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Square-Version": squareVersion
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Square token status failed: ${errorText}`);
+  }
+
+  return response.json() as Promise<{
+    expires_at?: string;
+    merchant_id?: string;
+    scopes?: string[];
   }>;
 }
 

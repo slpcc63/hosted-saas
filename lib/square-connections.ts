@@ -4,7 +4,8 @@ import { db } from "@/lib/db";
 import { ensureCustomerProfilesTable } from "@/lib/customers";
 import {
   getSquareEnvironmentLabel,
-  refreshSquareAuthorization
+  refreshSquareAuthorization,
+  retrieveSquareTokenStatus
 } from "@/lib/square";
 
 export type SquareConnection = {
@@ -111,10 +112,22 @@ export async function getSquareConnectionByCustomerId(customerId: string) {
 }
 
 export async function getValidSquareConnectionByCustomerId(customerId: string) {
-  const connection = await getSquareConnectionByCustomerId(customerId);
+  let connection = await getSquareConnectionByCustomerId(customerId);
 
   if (!connection) {
     return null;
+  }
+
+  if (connection.authorizedScopes.length === 0) {
+    const tokenStatus = await retrieveSquareTokenStatus(connection.accessToken);
+    connection = await upsertSquareConnection({
+      customerId,
+      merchantId: tokenStatus.merchant_id || connection.merchantId,
+      accessToken: connection.accessToken,
+      refreshToken: connection.refreshToken,
+      expiresAt: tokenStatus.expires_at ?? connection.expiresAt?.toISOString(),
+      authorizedScopes: tokenStatus.scopes ?? []
+    });
   }
 
   const refreshThreshold = Date.now() + 5 * 60 * 1000;
@@ -155,7 +168,7 @@ export async function upsertSquareConnection(input: {
       square_environment,
       authorized_scopes
     ) values ($1, $2, $3, $4, $5, $6, $7)
-    on conflict (customer_id)
+    on conflict (customer_id) where customer_id is not null
     do update set
       merchant_id = excluded.merchant_id,
       access_token = excluded.access_token,

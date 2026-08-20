@@ -69,6 +69,10 @@ export async function ensureSquareCalendarSinkSettingsTable() {
 
       alter table public.square_calendar_sink_settings
         add column if not exists enabled boolean not null default true;
+
+      create unique index if not exists square_calendar_sink_settings_customer_id_idx
+        on public.square_calendar_sink_settings(customer_id)
+        where customer_id is not null;
     `).then(() => undefined);
   }
 
@@ -81,7 +85,7 @@ export async function getOrCreateSquareCalendarSinkSettings(customerId: string) 
   await db.query(
     `insert into public.square_calendar_sink_settings (customer_id, feed_token)
      values ($1, $2)
-     on conflict (customer_id) do nothing`,
+     on conflict (customer_id) where customer_id is not null do nothing`,
     [customerId, newFeedToken()]
   );
 
