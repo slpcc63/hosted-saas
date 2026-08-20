@@ -77,7 +77,9 @@ export default async function CalendarSinkPage({ searchParams }: CalendarSinkPag
               <div className="dashboard-alert warning">
                 <strong>{overview.connected ? "Reconnect Square" : "Connect Square"}</strong>
                 <p>
-                  Schedule sync needs permission to read published shifts and active team members.
+                  {overview.connectionError === "authentication"
+                    ? "The saved Square connection is no longer valid. Reconnect Square to continue."
+                    : "Schedule sync needs permission to read published shifts and active team members."}
                 </p>
                 <a className="pill primary" href="/api/integrations/square/connect?plugin=square-calendar-sink">
                   {overview.connected ? "Reconnect Square" : "Connect Square"}

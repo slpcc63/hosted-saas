@@ -117,6 +117,23 @@ type SquareSearchScheduledShiftsResponse = {
   scheduled_shifts?: SquareScheduledShift[];
 };
 
+export class SquareApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly responseBody: string
+  ) {
+    super(`Square request failed with status ${status}`);
+    this.name = "SquareApiError";
+  }
+}
+
+export function isSquareAuthenticationError(error: unknown) {
+  return error instanceof SquareApiError &&
+    (error.status === 401 ||
+      error.responseBody.includes("AUTHENTICATION_ERROR") ||
+      error.responseBody.includes("UNAUTHORIZED"));
+}
+
 export async function squareApiRequest<T>(input: SquareApiRequestInit) {
   const response = await fetch(`${getSquareBaseUrl()}${input.path}`, {
     method: input.method ?? (input.body ? "POST" : "GET"),
@@ -130,7 +147,7 @@ export async function squareApiRequest<T>(input: SquareApiRequestInit) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Square request failed: ${errorText}`);
+    throw new SquareApiError(response.status, errorText);
   }
 
   return response.json() as Promise<T>;

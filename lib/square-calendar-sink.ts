@@ -11,6 +11,7 @@ import {
 } from "@/lib/square-plugin-installations";
 import {
   hasSquareScopes,
+  isSquareAuthenticationError,
   listSquareJobs,
   listSquareLocations,
   searchSquareScheduledShifts,
@@ -127,6 +128,7 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
   if (!connection) {
     return {
       connected: false,
+      connectionError: null,
       missingScopes: requiredSquareCalendarScopes,
       settings: null,
       teamMembers: [],
@@ -142,6 +144,7 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
   if (missingScopes.length > 0) {
     return {
       connected: true,
+      connectionError: null,
       missingScopes,
       settings,
       teamMembers: [],
@@ -149,25 +152,41 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
     };
   }
 
-  const teamMembers = await searchSquareTeamMembers(connection.accessToken);
-  const endAt = new Date();
-  endAt.setDate(endAt.getDate() + 62);
-  const upcomingShifts = settings.teamMemberId
-    ? await searchSquareScheduledShifts({
-        accessToken: connection.accessToken,
-        teamMemberIds: [settings.teamMemberId],
-        startAt: new Date(),
-        endAt
-      })
-    : [];
+  try {
+    const teamMembers = await searchSquareTeamMembers(connection.accessToken);
+    const endAt = new Date();
+    endAt.setDate(endAt.getDate() + 62);
+    const upcomingShifts = settings.teamMemberId
+      ? await searchSquareScheduledShifts({
+          accessToken: connection.accessToken,
+          teamMemberIds: [settings.teamMemberId],
+          startAt: new Date(),
+          endAt
+        })
+      : [];
 
-  return {
-    connected: true,
-    missingScopes,
-    settings,
-    teamMembers,
-    upcomingShifts
-  };
+    return {
+      connected: true,
+      connectionError: null,
+      missingScopes,
+      settings,
+      teamMembers,
+      upcomingShifts
+    };
+  } catch (error) {
+    if (!isSquareAuthenticationError(error)) {
+      throw error;
+    }
+
+    return {
+      connected: true,
+      connectionError: "authentication" as const,
+      missingScopes: requiredSquareCalendarScopes,
+      settings,
+      teamMembers: [],
+      upcomingShifts: []
+    };
+  }
 }
 
 export async function updateSquareCalendarSinkSettings(input: {
@@ -273,33 +292,41 @@ export async function getSquareCalendarSinkFeed(feedToken: string) {
   startAt.setDate(startAt.getDate() - 7);
   const endAt = new Date();
   endAt.setDate(endAt.getDate() + 62);
-  const [jobs, locations, shifts, teamMembers] = await Promise.all([
-    listSquareJobs(connection.accessToken),
-    listSquareLocations(connection.accessToken),
-    searchSquareScheduledShifts({
-      accessToken: connection.accessToken,
-      teamMemberIds: [settings.teamMemberId],
-      startAt,
-      endAt
-    }),
-    searchSquareTeamMembers(connection.accessToken)
-  ]);
-
-  const locationIds = Array.from(
-    new Set(
-      shifts
-        .map((shift) => shift.published_shift_details?.location_id)
-        .filter((locationId): locationId is string => Boolean(locationId))
-    )
-  );
-  const coworkerShifts = locationIds.length
-    ? await searchSquareScheduledShifts({
+  try {
+    const [jobs, locations, shifts, teamMembers] = await Promise.all([
+      listSquareJobs(connection.accessToken),
+      listSquareLocations(connection.accessToken),
+      searchSquareScheduledShifts({
         accessToken: connection.accessToken,
-        locationIds,
+        teamMemberIds: [settings.teamMemberId],
         startAt,
         endAt
-      })
-    : [];
+      }),
+      searchSquareTeamMembers(connection.accessToken)
+    ]);
 
-  return { settings, jobs, locations, shifts, teamMembers, coworkerShifts };
+    const locationIds = Array.from(
+      new Set(
+        shifts
+          .map((shift) => shift.published_shift_details?.location_id)
+          .filter((locationId): locationId is string => Boolean(locationId))
+      )
+    );
+    const coworkerShifts = locationIds.length
+      ? await searchSquareScheduledShifts({
+          accessToken: connection.accessToken,
+          locationIds,
+          startAt,
+          endAt
+        })
+      : [];
+
+    return { settings, jobs, locations, shifts, teamMembers, coworkerShifts };
+  } catch (error) {
+    if (isSquareAuthenticationError(error)) {
+      return null;
+    }
+
+    throw error;
+  }
 }
