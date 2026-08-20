@@ -2,7 +2,10 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { ensureCustomerProfilesTable } from "@/lib/customers";
-import { getSquareEnvironmentLabel } from "@/lib/square";
+import {
+  getSquareEnvironmentLabel,
+  refreshSquareAuthorization
+} from "@/lib/square";
 
 export type SquareConnection = {
   accessToken: string;
@@ -105,6 +108,31 @@ export async function getSquareConnectionByCustomerId(customerId: string) {
   }
 
   return mapSquareConnection(result.rows[0]);
+}
+
+export async function getValidSquareConnectionByCustomerId(customerId: string) {
+  const connection = await getSquareConnectionByCustomerId(customerId);
+
+  if (!connection) {
+    return null;
+  }
+
+  const refreshThreshold = Date.now() + 5 * 60 * 1000;
+
+  if (!connection.expiresAt || connection.expiresAt.getTime() > refreshThreshold) {
+    return connection;
+  }
+
+  const refreshed = await refreshSquareAuthorization(connection.refreshToken);
+
+  return upsertSquareConnection({
+    customerId,
+    merchantId: refreshed.merchant_id || connection.merchantId,
+    accessToken: refreshed.access_token,
+    refreshToken: refreshed.refresh_token,
+    expiresAt: refreshed.expires_at,
+    authorizedScopes: refreshed.scopes ?? connection.authorizedScopes
+  });
 }
 
 export async function upsertSquareConnection(input: {

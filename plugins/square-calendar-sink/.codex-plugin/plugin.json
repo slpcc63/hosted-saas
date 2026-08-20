@@ -1,6 +1,6 @@
 {
   "name": "square-calendar-sink",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "description": "Square calendar sync plugin for schedule and shift sink workflows.",
   "author": {
     "name": "SLPCC63",
@@ -17,17 +17,21 @@
     "sync"
   ],
   "interface": {
-    "displayName": "Square Calendar Sink (Backlog)",
-    "shortDescription": "Backlog placeholder. Not an active customer offering.",
-    "longDescription": "This plugin remains in backlog only. It should not be presented as an active offer until the scope is reviewed and approved.",
+    "displayName": "Square Calendar Sync",
+    "shortDescription": "Sync published Square shifts into a subscribed calendar.",
+    "longDescription": "Creates a private, read-only ICS calendar subscription from a selected Square team member’s published shifts.",
     "developerName": "SLPCC63",
     "category": "Operations",
-    "capabilities": [],
+    "capabilities": [
+      "Read published scheduled shifts from Square.",
+      "Create a private ICS subscription feed for Apple Calendar, Google Calendar, and compatible clients.",
+      "Reflect updated and deleted Square shifts in the subscribed calendar."
+    ],
     "websiteURL": "https://slpcc63.com",
     "privacyPolicyURL": "https://slpcc63.com/privacy",
     "termsOfServiceURL": "https://slpcc63.com/terms",
     "defaultPrompt": [
-      "Show the Square calendar sink backlog placeholder."
+      "Show the Square calendar sync setup."
     ],
     "brandColor": "#2C6E63"
   }

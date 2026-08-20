@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:calendar-sync": "node --no-warnings --experimental-strip-types --test tests/calendar-sync.test.mts",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
