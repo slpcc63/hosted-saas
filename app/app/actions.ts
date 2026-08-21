@@ -624,6 +624,15 @@ export async function saveTimeCardConfirmationSettingsAction(formData: FormData)
     redirect("/app");
   }
 
+  const subscription = await getActiveSubscriptionForProduct({
+    customerId: customer.id,
+    productSlug: "square-time-card-manager"
+  });
+
+  if (!subscription) {
+    redirect(`${redirectTo}?error=confirmation_subscription_missing`);
+  }
+
   let failed = false;
 
   try {
@@ -703,6 +712,15 @@ export async function resendTimeCardConfirmationRequestAction(formData: FormData
 
   if (!customer) {
     redirect("/app");
+  }
+
+  const subscription = await getActiveSubscriptionForProduct({
+    customerId: customer.id,
+    productSlug: "square-time-card-manager"
+  });
+
+  if (!subscription) {
+    redirect(`${redirectTo}?error=confirmation_subscription_missing`);
   }
 
   let failed = false;

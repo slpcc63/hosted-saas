@@ -73,3 +73,14 @@ export function buildCompletedConfirmationPeriod(input: {
   const periodStart = shiftDateString(periodEnd, -(input.periodDays - 1));
   return { periodEnd, periodStart };
 }
+
+export function buildDefaultManualConfirmationPeriod(
+  now = new Date(),
+  timezone = "America/Los_Angeles"
+) {
+  return buildCompletedConfirmationPeriod({
+    now,
+    periodDays: 7,
+    timezone
+  });
+}

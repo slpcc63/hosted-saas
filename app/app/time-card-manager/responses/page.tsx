@@ -6,10 +6,13 @@ import {
   sendTimeCardConfirmationRequestAction,
   syncTimeCardEmployeesAction
 } from "@/app/app/actions";
+import { ConfirmFormSubmit } from "@/components/confirm-form-submit";
 import { SiteHeader } from "@/components/site-header";
 import { requireCurrentCustomer } from "@/lib/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { isTimeCardManagerAutomationLive } from "@/lib/square-time-card-manager";
+import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
+import { buildDefaultManualConfirmationPeriod } from "@/lib/time-card-confirmation-schedule";
 import {
   getTimeCardConfirmationAuditEvents,
   getTimeCardConfirmationRuns,
@@ -44,15 +47,13 @@ type ManagerResponsesPageProps = {
   }>;
 };
 
-function formatDateInput(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function getDefaultPeriod() {
-  const end = new Date();
-  const start = new Date(end);
-  start.setDate(end.getDate() - 6);
-  return { periodEnd: formatDateInput(end), periodStart: formatDateInput(start) };
+function formatScheduleTime(value: string) {
+  const [hour, minute] = value.split(":").map(Number);
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC"
+  }).format(new Date(Date.UTC(2026, 0, 1, hour, minute)));
 }
 
 export default async function ManagerResponsesPage({
@@ -63,18 +64,23 @@ export default async function ManagerResponsesPage({
     ? "/time-card-manager/responses"
     : "/app/time-card-manager/responses";
   const timeCardPath = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
+  const subscriptionsPath = routing.appHost ? "/subscriptions" : "/app/subscriptions";
   const { customer } = await requireCurrentCustomer(redirectTo, routing.dashboardPath);
-  const [employees, requests, auditEvents, confirmationRuns, confirmationSettings, query] = await Promise.all([
+  const [employees, requests, auditEvents, confirmationRuns, confirmationSettings, subscription, query] = await Promise.all([
     getTimeCardEmployeeContacts(customer.id),
     getTimeCardConfirmationRequests(customer.id, 250),
     getTimeCardConfirmationAuditEvents(customer.id),
     getTimeCardConfirmationRuns(customer.id),
     getOrCreateTimeCardConfirmationSettings(customer.id),
+    getActiveSubscriptionForProduct({
+      customerId: customer.id,
+      productSlug: "square-time-card-manager"
+    }),
     searchParams
   ]);
   const automationLive = isTimeCardManagerAutomationLive();
-  const defaultPeriod = getDefaultPeriod();
   const now = new Date();
+  const defaultPeriod = buildDefaultManualConfirmationPeriod(now, confirmationSettings.timezone);
   const filters = {
     employee: query?.employee,
     periodEnd: query?.periodEnd,
@@ -90,6 +96,7 @@ export default async function ManagerResponsesPage({
     request.status === "approved" || request.status === "rejected"
   );
   const overdueCount = requests.filter((request) => isTimeCardRequestOverdue(request, now)).length;
+  const emailReadyCount = employees.filter((employee) => employee.active && employee.email).length;
   const exportParams = new URLSearchParams();
 
   Object.entries(filters).forEach(([key, value]) => {
@@ -161,7 +168,27 @@ export default async function ManagerResponsesPage({
           <p className="form-error">That response is no longer awaiting review or contains invalid shift details.</p>
         ) : null}
 
-        <section className="dashboard-card">
+        {!subscription ? (
+          <div className="dashboard-alert warning">
+            <strong>Setup mode — subscription required for sending</strong>
+            <p>
+              You can review history, maintain the Square roster, and export reports.
+              Sending confirmations, reminders, and weekly automation remain locked until
+              a Time Card Manager subscription is active.
+            </p>
+            <a className="pill primary" href={subscriptionsPath}>View subscription plans</a>
+          </div>
+        ) : null}
+
+        <details className="dashboard-card workflow-disclosure confirmation-report-card">
+          <summary>
+            <span>
+              <strong>Reports and filters</strong>
+              <small>{requests.length} total · {overdueCount} overdue</small>
+            </span>
+            <span className="status-chip">{filteredRequests.length} matching</span>
+          </summary>
+          <div className="workflow-disclosure-content">
           <div className="subcard-header">
             <div>
               <h2>Confirmation report</h2>
@@ -226,7 +253,8 @@ export default async function ManagerResponsesPage({
               <a className="pill" href={redirectTo}>Clear</a>
             </div>
           </form>
-        </section>
+          </div>
+        </details>
 
         <div className="manager-workflow-grid">
           <section className="dashboard-card manager-workflow-main">
@@ -324,15 +352,34 @@ export default async function ManagerResponsesPage({
                     <form action={resendTimeCardConfirmationRequestAction}>
                       <input name="redirectTo" type="hidden" value={redirectTo} />
                       <input name="requestId" type="hidden" value={request.id} />
-                      <button className="pill pill-button" type="submit">
-                        {request.status === "delivery_failed" ? "Retry email" : "Send reminder"}
-                      </button>
+                      {subscription ? (
+                        <ConfirmFormSubmit
+                          action="resend_confirmation"
+                          buttonClassName="pill pill-button"
+                          buttonLabel={request.status === "delivery_failed" ? "Retry email" : "Send reminder"}
+                          confirmLabel={request.status === "delivery_failed" ? "Retry email now" : "Send reminder now"}
+                          employeeEmail={request.employeeEmail}
+                          employeeName={request.employeeName}
+                          periodEnd={request.periodEnd}
+                          periodStart={request.periodStart}
+                        />
+                      ) : (
+                        <a className="pill" href={subscriptionsPath}>Subscription required</a>
+                      )}
                     </form>
                   </article>
                 ))}
               </div>
             ) : <p className="auth-helper">No open requests.</p>}
 
+            <details className="workflow-disclosure workflow-history">
+              <summary>
+                <span>
+                  <strong>Decision history and audit</strong>
+                  <small>{completedRequests.length} decisions · {auditEvents.length} audit events</small>
+                </span>
+              </summary>
+              <div className="workflow-disclosure-content">
             <div className="section-heading">
               <div>
                 <h2>Decision history</h2>
@@ -353,6 +400,10 @@ export default async function ManagerResponsesPage({
                       {request.responseCode === "a"
                         ? "Did not work"
                         : `${request.reportedShiftDate}: ${request.reportedTimeIn}–${request.reportedTimeOut}`}
+                    </p>
+                    <p className="delivery-log-time">
+                      Period {request.periodStart} through {request.periodEnd}
+                      {request.reviewedAt ? ` · Reviewed ${request.reviewedAt.toLocaleString()}` : ""}
                     </p>
                     {request.managerNote ? <p>Manager note: {request.managerNote}</p> : null}
                   </article>
@@ -381,16 +432,40 @@ export default async function ManagerResponsesPage({
                 ))}
               </div>
             ) : <p className="auth-helper">No audit events yet.</p>}
+              </div>
+            </details>
           </section>
 
-          <aside className="dashboard-card">
+          <aside className="manager-operations">
+            <details className="dashboard-card workflow-disclosure operations-disclosure">
+              <summary>
+                <span>
+                  <strong>Weekly automation</strong>
+                  <small>
+                    {weekdayOptions[confirmationSettings.sendDayOfWeek]} at {formatScheduleTime(confirmationSettings.sendTimeLocal)}
+                    {` · ${emailReadyCount} email-ready`}
+                  </small>
+                </span>
+                <span className="status-chip">
+                  {!subscription
+                    ? "locked"
+                    : confirmationSettings.automationEnabled && automationLive
+                      ? "enabled"
+                      : "off"}
+                </span>
+              </summary>
+              <div className="workflow-disclosure-content">
             <div className="subcard-header">
               <div>
                 <h2>Weekly email schedule</h2>
                 <p>Automatically request confirmation for the completed period ending yesterday.</p>
               </div>
               <span className="status-chip">
-                {confirmationSettings.automationEnabled && automationLive ? "enabled" : "off"}
+                {!subscription
+                  ? "subscription required"
+                  : confirmationSettings.automationEnabled && automationLive
+                    ? "enabled"
+                    : "off"}
               </span>
             </div>
             <form action={saveTimeCardConfirmationSettingsAction} className="auth-form">
@@ -398,7 +473,7 @@ export default async function ManagerResponsesPage({
               <label className="checkbox-row">
                 <input
                   defaultChecked={confirmationSettings.automationEnabled}
-                  disabled={!automationLive}
+                  disabled={!automationLive || !subscription}
                   name="automationEnabled"
                   type="checkbox"
                 />
@@ -407,7 +482,7 @@ export default async function ManagerResponsesPage({
               <div className="form-grid-two">
                 <label className="field">
                   <span>Send day</span>
-                  <select defaultValue={confirmationSettings.sendDayOfWeek} name="sendDayOfWeek">
+                  <select disabled={!subscription} defaultValue={confirmationSettings.sendDayOfWeek} name="sendDayOfWeek">
                     {weekdayOptions.map((day, index) => (
                       <option key={day} value={index}>{day}</option>
                     ))}
@@ -415,21 +490,39 @@ export default async function ManagerResponsesPage({
                 </label>
                 <label className="field">
                   <span>Send time</span>
-                  <input defaultValue={confirmationSettings.sendTimeLocal} name="sendTimeLocal" type="time" />
+                  <input disabled={!subscription} defaultValue={confirmationSettings.sendTimeLocal} name="sendTimeLocal" type="time" />
                 </label>
               </div>
               <label className="field">
                 <span>Schedule timezone</span>
-                <input defaultValue={confirmationSettings.timezone} name="timezone" />
+                <select disabled={!subscription} defaultValue={confirmationSettings.timezone} name="timezone">
+                  <option value="America/Los_Angeles">Pacific Time</option>
+                  <option value="America/Denver">Mountain Time</option>
+                  <option value="America/Chicago">Central Time</option>
+                  <option value="America/New_York">Eastern Time</option>
+                </select>
               </label>
               <label className="field">
                 <span>Days in each confirmation period</span>
-                <input defaultValue={confirmationSettings.periodDays} max="31" min="1" name="periodDays" type="number" />
+                <input disabled={!subscription} defaultValue={confirmationSettings.periodDays} max="31" min="1" name="periodDays" type="number" />
               </label>
-              {!automationLive ? (
-                <p className="auth-helper">Production cron must be configured before weekly email automation can be enabled.</p>
+              {!subscription ? (
+                <p className="auth-helper">Activate a subscription before weekly sending can be enabled.</p>
               ) : null}
-              <button className="pill pill-button" type="submit">Save weekly schedule</button>
+              {!automationLive ? (
+                <p className="auth-helper">Weekly automation is temporarily unavailable.</p>
+              ) : null}
+              {subscription ? (
+                <ConfirmFormSubmit
+                  action="save_schedule"
+                  buttonClassName="pill pill-button"
+                  buttonLabel="Save weekly schedule"
+                  confirmLabel="Enable weekly emails"
+                  employeeCount={emailReadyCount}
+                />
+              ) : (
+                <a className="pill primary" href={subscriptionsPath}>View subscription plans</a>
+              )}
             </form>
 
             <div className="section-heading">
@@ -458,7 +551,17 @@ export default async function ManagerResponsesPage({
             ) : (
               <p className="auth-helper">No automated confirmation run has occurred yet.</p>
             )}
+              </div>
+            </details>
 
+            <details className="dashboard-card workflow-disclosure operations-disclosure">
+              <summary>
+                <span>
+                  <strong>Employee email roster</strong>
+                  <small>{employees.filter((employee) => employee.active).length} active · {emailReadyCount} email-ready</small>
+                </span>
+              </summary>
+              <div className="workflow-disclosure-content">
             <div className="section-heading">
               <div>
                 <h2>Employee email roster</h2>
@@ -515,7 +618,19 @@ export default async function ManagerResponsesPage({
                           <input defaultValue={defaultPeriod.periodEnd} name="periodEnd" type="date" />
                         </label>
                       </div>
-                      <button className="pill primary pill-button" type="submit">Send confirmation email</button>
+                      {subscription ? (
+                        <ConfirmFormSubmit
+                          action="send_confirmation"
+                          buttonLabel="Send confirmation email"
+                          confirmLabel="Send email now"
+                          employeeEmail={employee.email}
+                          employeeName={employee.displayName}
+                          periodEnd={defaultPeriod.periodEnd}
+                          periodStart={defaultPeriod.periodStart}
+                        />
+                      ) : (
+                        <a className="pill" href={subscriptionsPath}>Subscription required to send</a>
+                      )}
                     </form>
                   ) : null}
                 </article>
@@ -524,6 +639,8 @@ export default async function ManagerResponsesPage({
             {!employees.length ? (
               <p className="auth-helper">Sync Square employees to create the confirmation roster.</p>
             ) : null}
+              </div>
+            </details>
           </aside>
         </div>
       </main>

@@ -4,6 +4,7 @@ import test from "node:test";
 import { parseEmployeeTimeResponse } from "../lib/time-card-response-parser.ts";
 import {
   buildCompletedConfirmationPeriod,
+  buildDefaultManualConfirmationPeriod,
   isWeeklyConfirmationScheduleDue
 } from "../lib/time-card-confirmation-schedule.ts";
 import {
@@ -114,6 +115,13 @@ test("builds a completed seven-day period ending yesterday in the configured tim
       timezone: "America/Los_Angeles"
     }),
     { periodStart: "2026-08-17", periodEnd: "2026-08-23" }
+  );
+});
+
+test("defaults manual confirmation requests to the last seven completed days", () => {
+  assert.deepEqual(
+    buildDefaultManualConfirmationPeriod(new Date("2026-08-21T19:00:00Z")),
+    { periodStart: "2026-08-14", periodEnd: "2026-08-20" }
   );
 });
 

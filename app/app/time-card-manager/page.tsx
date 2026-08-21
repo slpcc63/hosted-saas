@@ -66,10 +66,9 @@ export default async function TimeCardManagerPage({
           <section className="dashboard-card">
             <h1>Notification controls</h1>
             <p>
-              Phase 1 currently runs on live email notifications, manual Square
-              scans, and scheduled automation when cron is enabled in
-              production. Approved SMS stays visible here, but it is not active
-              until the texting provider is connected.
+              M4 provides live email notifications, secure employee confirmations,
+              manager review, reporting, and protected weekly scheduling. Text
+              messages are planned for a later release and remain off.
             </p>
             <div className="dashboard-alert">
               <strong>Employee email confirmations</strong>
@@ -95,14 +94,12 @@ export default async function TimeCardManagerPage({
             ) : null}
             {params?.saved === "settings_manual_only" ? (
               <p className="form-success">
-                Email settings saved. Automated runs will stay off until cron is
-                enabled in the deployment environment.
+                Email settings saved. Scheduled runs remain temporarily unavailable.
               </p>
             ) : null}
             {params?.saved === "settings_sms_pending" ? (
               <p className="form-success">
-                Email settings saved. SMS remains approved but inactive until the
-                texting provider is connected.
+                Email settings saved. This release continues to use email only.
               </p>
             ) : null}
             {params?.saved === "schedule" ? (
@@ -228,8 +225,8 @@ export default async function TimeCardManagerPage({
             {!overview.entitlement ? (
               <div className="metric">
                 <strong>No active subscription</strong>
-                Subscribe to the Square Time Card Manager before enabling
-                notification automation and texting controls.
+                Review history and setup remain available. Subscribe before sending
+                notifications or enabling weekly email automation.
                 <div className="subscription-actions">
                   <a className="pill primary" href={subscriptionsPath}>
                     View subscription plans
@@ -248,17 +245,16 @@ export default async function TimeCardManagerPage({
                     >
                       <option value="email_only">Email only</option>
                       <option disabled={!overview.textingLive} value="text_only">
-                        Text only{!overview.textingLive ? " (coming soon)" : ""}
+                        Text only{!overview.textingLive ? " (planned later)" : ""}
                       </option>
                       <option disabled={!overview.textingLive} value="email_and_text">
-                        Email and text{!overview.textingLive ? " (coming soon)" : ""}
+                        Email and text{!overview.textingLive ? " (planned later)" : ""}
                       </option>
                     </select>
                   </label>
                   {!overview.textingLive ? (
                     <p className="auth-helper">
-                      SMS is an approved follow-up capability, but phase 1 still sends through
-                      email only until the texting provider is configured.
+                      This release sends email only. Text delivery will be added later.
                     </p>
                   ) : !overview.entitlement.textingEnabled ? (
                     <p className="auth-helper">
@@ -275,14 +271,13 @@ export default async function TimeCardManagerPage({
                     />
                     <span>
                       Enable automated runs
-                      {!overview.automationLive ? " (coming soon)" : ""}
+                      {!overview.automationLive ? " (temporarily unavailable)" : ""}
                     </span>
                   </label>
                   {!overview.automationLive ? (
                     <p className="auth-helper">
-                      Automated runs are wired in-app, but they will stay off until
-                      `CRON_SECRET` is configured in Vercel and the scheduled GitHub
-                      Actions workflow is allowed to call this app.
+                      Scheduled runs are temporarily unavailable. Manual email tools
+                      remain available.
                     </p>
                   ) : null}
                   <button className="pill primary pill-button" type="submit">
@@ -557,14 +552,12 @@ export default async function TimeCardManagerPage({
           </section>
 
           <aside className="dashboard-card">
-            <h2>Phase 1 status</h2>
+            <h2>M4 status</h2>
             <ul className="checklist compact-list">
-              <li>Email delivery is live today.</li>
-              <li>SMS is approved, but still waiting on the texting provider setup.</li>
-              <li>
-                Automation runs are available once the production deployment has
-                `CRON_SECRET` configured and the GitHub Actions scheduler secret is set.
-              </li>
+              <li>Secure employee email confirmations and manager approval are live.</li>
+              <li>Reporting, CSV export, reminders, and overdue tracking are ready.</li>
+              <li>Weekly email scheduling is ready and remains off until you enable it.</li>
+              <li>Text messages are planned for a later release.</li>
             </ul>
             <div className="metric">
               <strong>Next run</strong>
