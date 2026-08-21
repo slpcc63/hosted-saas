@@ -25,16 +25,19 @@ them back up quickly.
   timecards and send missed clock-out alerts when the existing Square
   connection includes `TIMECARDS_READ` and `EMPLOYEES_READ`. Scheduled runs are
   now wired through a protected automation route plus a 15-minute GitHub
-  Actions workflow with duplicate-run and duplicate-alert protection. SMS still
-  needs a provider.
+  Actions workflow with duplicate-run and duplicate-alert protection. SMS is
+  now wired for Twilio-compatible delivery and quota tracking, and the Twilio
+  env vars are configured in production. The remaining SMS blocker is Twilio
+  Trust Hub / A2P approval and validating a successful carrier-accepted text
+  from a real customer profile. Recent delivery activity is now visible in-app
+  so failed, blocked, and sent attempts can be reviewed without checking logs.
 - What is needed from Shannon:
-  - Which email provider should send these notifications
-  - Which texting provider should send SMS
-  - Add `CRON_SECRET` in Vercel if it is not already present
-  - Add the matching GitHub secret `TIME_CARD_AUTOMATION_CRON_SECRET`
+  - Finish Twilio Trust Hub / A2P approval so production texts can be delivered
+  - Keep a valid customer phone number on the account profile used for testing
 - Next step when resumed:
-  Verify the production scheduler runs against a real Square-connected customer,
-  then connect SMS to the chosen provider.
+  Verify Twilio-backed SMS delivery in production with a real customer profile,
+  then manually trigger or observe a scheduled missed clock-out run and confirm
+  it sends through the configured delivery mode.
 
 ### 2. Stripe live billing activation
 

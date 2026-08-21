@@ -1,5 +1,5 @@
 const productionAppOrigin =
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000";
+  process.env.NEXT_PUBLIC_APP_URL ?? "https://hosted-saas.vercel.app";
 const productionMarketingOrigin =
   process.env.NEXT_PUBLIC_MARKETING_SITE_URL ?? "http://localhost:3000";
 const previewOrigin = process.env.VERCEL_URL

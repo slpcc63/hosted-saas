@@ -42,8 +42,8 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
           <section className="dashboard-card">
             <h1>Active subscriptions</h1>
             <p>
-              This screen shows the subscription records currently attached to
-              your customer account.
+              Choose, review, and update the plans attached to your customer
+              account.
             </p>
             {params?.saved === "subscription" ? (
               <p className="form-success">Subscription started successfully.</p>
@@ -78,7 +78,7 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
             {subscriptions.length === 0 ? (
               <div className="metric">
                 <strong>No subscriptions yet</strong>
-                Choose a plan below to start your first subscription.
+                Choose a plan below to unlock the rest of your setup flow.
               </div>
             ) : (
               <div className="stack-list">
@@ -181,7 +181,7 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
                     {plan.productSlug === "square-time-card-manager" ? (
                       <p className="auth-helper">
                         {plan.textingEnabled
-                          ? `Includes an approved SMS package with a ${plan.monthlyTextLimit} text monthly limit. Live SMS delivery still depends on provider activation.`
+                          ? `Includes SMS with a ${plan.monthlyTextLimit} text monthly limit once the deployment has the Twilio provider configured.`
                           : "This package is currently positioned around the approved phase 1 scope."}
                       </p>
                     ) : null}
@@ -212,9 +212,9 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
           <aside className="dashboard-card">
             <h2>Billing notes</h2>
             <ul className="checklist compact-list">
-              <li>Only explicitly approved products should appear here.</li>
-              <li>Backlog offerings stay unpublished until they are reviewed and approved.</li>
-              <li>Billing setup can evolve without changing customer ownership.</li>
+              <li>Your subscription controls which Time Card Manager features are available.</li>
+              <li>Text-enabled plans include a monthly text allowance.</li>
+              <li>You can return here any time to change plans or manage billing.</li>
             </ul>
             <div className="metric">
               <strong>Customer</strong>

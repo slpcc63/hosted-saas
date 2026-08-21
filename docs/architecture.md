@@ -4,7 +4,8 @@
 
 - `slpcc63.com`: public marketing site on Vercel
 - `www.slpcc63.com`: optional redirect to the apex domain
-- `app.slpcc63.com`: custom SaaS app on Vercel
+- `hosted-saas.vercel.app`: current SaaS app on Vercel
+- `app.slpcc63.com`: optional future custom app domain
 
 ## Routing model
 
@@ -15,9 +16,9 @@
 - protected product routes read a Better Auth session before rendering
 - result:
   - `slpcc63.com/` -> marketing homepage
-  - `app.slpcc63.com/` -> internal `/app`
-  - `app.slpcc63.com/sign-in` -> internal `/app/sign-in`
-  - `app.slpcc63.com/dashboard` -> internal `/app/dashboard`
+  - `hosted-saas.vercel.app/` -> internal `/app`
+  - `hosted-saas.vercel.app/sign-in` -> internal `/app/sign-in`
+  - `hosted-saas.vercel.app/dashboard` -> internal `/app/dashboard`
 
 ## Recommended early stack
 

@@ -1,19 +1,20 @@
 # Hosted SaaS Starter
 
 This project is a Vercel-first starter for `slpcc63.com`, with marketing on the
-root domain and the SaaS app on `app.slpcc63.com`.
+root domain and the SaaS app currently running on `hosted-saas.vercel.app`.
 
 ## Recommended setup
 
 - `slpcc63.com` -> Vercel marketing homepage
 - `www.slpcc63.com` -> optional redirect to the apex domain
-- `app.slpcc63.com` -> Vercel-hosted SaaS app
+- `hosted-saas.vercel.app` -> current Vercel-hosted SaaS app
+- `app.slpcc63.com` -> optional future custom app domain
 - `api.slpcc63.com` -> optional future API split
 
 ## How routing works
 
 - the root domain serves the marketing homepage at `/`
-- requests for `app.slpcc63.com` are rewritten by middleware to internal app routes
+- requests for the app hostname are rewritten by middleware to internal app routes
 - the app subdomain owns `/` and `/dashboard` externally, even though the code
   lives under internal `/app/*` routes
 - the app root and dashboard now require a Better Auth session
@@ -88,7 +89,7 @@ Neon-style Postgres database.
 
    ```text
    http://localhost:3000/api/auth/callback/google
-   https://app.slpcc63.com/api/auth/callback/google
+   https://hosted-saas.vercel.app/api/auth/callback/google
    ```
 
 3. Put the credentials into `.env.local` as `GOOGLE_CLIENT_ID` and
@@ -133,6 +134,7 @@ subscription row using the Checkout session metadata.
 - Neon stores auth data and customer-owned product records
 - signed-in users land in the customer dashboard and Time Card Manager screens
 - the current approved customer-facing product is the Square Time Card Manager
+- Square Calendar Sink publishes one team member's Square schedule as a private Apple Calendar subscription
 
 ## Square Time Card Manager baseline
 
@@ -143,13 +145,21 @@ subscription row using the Checkout session metadata.
 - the current approved workflow centers on missed clock-out notifications
 - additional offerings remain unpublished or in backlog until approved
 
+## Square Calendar Sink
+
+- the seller connects Square with `TIMECARDS_READ` and `EMPLOYEES_READ`
+- the customer selects their own Square team-member record
+- the app reads published scheduled shifts for that team member
+- a private, rotatable iCalendar URL feeds Apple Calendar
+- Square remains the source of truth for additions, edits, and deletions
+
 Add these environment variables before testing Square OAuth:
 
 ```text
 SQUARE_ENVIRONMENT=production
 SQUARE_APPLICATION_ID=...
 SQUARE_APPLICATION_SECRET=...
-SQUARE_REDIRECT_URI=https://app.slpcc63.com/api/integrations/square/callback
+SQUARE_REDIRECT_URI=https://hosted-saas.vercel.app/api/integrations/square/callback
 SQUARE_SCOPES=MERCHANT_PROFILE_READ TIMECARDS_READ EMPLOYEES_READ
 ```
 
@@ -177,7 +187,7 @@ route plus a scheduled GitHub Actions workflow.
    every 15 minutes and calls:
 
    ```text
-   https://app.slpcc63.com/api/cron/time-card-manager
+   https://hosted-saas.vercel.app/api/cron/time-card-manager
    ```
 
 4. The automation route checks for schedule entries whose

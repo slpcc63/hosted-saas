@@ -32,7 +32,7 @@ export function getSquareAppSecret() {
 export function getSquareRedirectUri() {
   return (
     process.env.SQUARE_REDIRECT_URI ??
-    "https://app.slpcc63.com/api/integrations/square/callback"
+    "https://hosted-saas.vercel.app/api/integrations/square/callback"
   );
 }
 
@@ -74,15 +74,65 @@ type SquareSearchTimecardsResponse = {
   }>;
 };
 
+export type SquareTeamMember = {
+  family_name?: string;
+  given_name?: string;
+  id: string;
+  reference_id?: string;
+};
+
 type SquareSearchTeamMembersResponse = {
   cursor?: string;
-  team_members?: Array<{
-    family_name?: string;
-    given_name?: string;
-    id: string;
-    reference_id?: string;
-  }>;
+  team_members?: SquareTeamMember[];
 };
+
+export type SquareJob = {
+  id: string;
+  title?: string;
+};
+
+type SquareListJobsResponse = {
+  cursor?: string;
+  jobs?: SquareJob[];
+};
+
+export type SquareScheduledShift = {
+  id: string;
+  published_shift_details?: {
+    end_at: string;
+    is_deleted?: boolean;
+    job_id: string;
+    location_id: string;
+    notes?: string;
+    start_at: string;
+    team_member_id?: string;
+    timezone?: string;
+  };
+  updated_at?: string;
+  version?: number;
+};
+
+type SquareSearchScheduledShiftsResponse = {
+  cursor?: string;
+  scheduled_shifts?: SquareScheduledShift[];
+};
+
+export class SquareApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly responseBody: string
+  ) {
+    super(`Square request failed with status ${status}`);
+    this.name = "SquareApiError";
+  }
+}
+
+export function isSquareAuthenticationError(error: unknown) {
+  return error instanceof SquareApiError &&
+    (error.status === 401 ||
+      error.responseBody.includes("AUTHENTICATION_ERROR") ||
+      error.responseBody.includes("UNAUTHORIZED"));
+}
 
 export async function squareApiRequest<T>(input: SquareApiRequestInit) {
   const response = await fetch(`${getSquareBaseUrl()}${input.path}`, {
@@ -97,7 +147,7 @@ export async function squareApiRequest<T>(input: SquareApiRequestInit) {
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Square request failed: ${errorText}`);
+    throw new SquareApiError(response.status, errorText);
   }
 
   return response.json() as Promise<T>;
@@ -174,6 +224,77 @@ export async function searchSquareTeamMembers(accessToken: string) {
   return teamMembers;
 }
 
+export async function searchSquareScheduledShifts(input: {
+  accessToken: string;
+  endAt: Date;
+  locationIds?: string[];
+  startAt: Date;
+  teamMemberIds?: string[];
+}) {
+  const scheduledShifts: SquareScheduledShift[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const response = await squareApiRequest<SquareSearchScheduledShiftsResponse>({
+      accessToken: input.accessToken,
+      path: "/v2/labor/scheduled-shifts/search",
+      body: {
+        cursor,
+        limit: 50,
+        query: {
+          filter: {
+            assignment_status: "ASSIGNED",
+            scheduled_shift_statuses: ["PUBLISHED"],
+            start: {
+              end_at: input.endAt.toISOString()
+            },
+            end: {
+              start_at: input.startAt.toISOString()
+            },
+            ...(input.locationIds?.length ? { location_ids: input.locationIds } : {}),
+            ...(input.teamMemberIds?.length ? { team_member_ids: input.teamMemberIds } : {})
+          },
+          sort: {
+            field: "START_AT",
+            order: "ASC"
+          }
+        }
+      }
+    });
+
+    if (response.scheduled_shifts?.length) {
+      scheduledShifts.push(...response.scheduled_shifts);
+    }
+
+    cursor = response.cursor;
+  } while (cursor);
+
+  return scheduledShifts.filter(
+    (shift) => shift.published_shift_details && !shift.published_shift_details.is_deleted
+  );
+}
+
+export async function listSquareJobs(accessToken: string) {
+  const jobs: SquareJob[] = [];
+  let cursor: string | undefined;
+
+  do {
+    const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    const response = await squareApiRequest<SquareListJobsResponse>({
+      accessToken,
+      path: `/v2/team-members/jobs${query}`
+    });
+
+    if (response.jobs?.length) {
+      jobs.push(...response.jobs);
+    }
+
+    cursor = response.cursor;
+  } while (cursor);
+
+  return jobs;
+}
+
 export function hasSquareScopes(
   authorizedScopes: string[],
   requiredScopes: string[]
@@ -216,6 +337,64 @@ export async function exchangeSquareAuthorizationCode(code: string) {
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Square token exchange failed: ${errorText}`);
+  }
+
+  const tokenResponse = await response.json() as {
+    access_token: string;
+    expires_at?: string;
+    merchant_id: string;
+    refresh_token: string;
+    scopes?: string[];
+    token_type: string;
+  };
+  const tokenStatus = await retrieveSquareTokenStatus(tokenResponse.access_token);
+
+  return {
+    ...tokenResponse,
+    scopes: tokenStatus.scopes ?? []
+  };
+}
+
+export async function retrieveSquareTokenStatus(accessToken: string) {
+  const response = await fetch(`${getSquareBaseUrl()}/oauth2/token/status`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+      "Square-Version": squareVersion
+    }
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Square token status failed: ${errorText}`);
+  }
+
+  return response.json() as Promise<{
+    expires_at?: string;
+    merchant_id?: string;
+    scopes?: string[];
+  }>;
+}
+
+export async function refreshSquareAuthorization(refreshToken: string) {
+  const response = await fetch(`${getSquareBaseUrl()}/oauth2/token`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Square-Version": squareVersion
+    },
+    body: JSON.stringify({
+      client_id: getSquareAppId(),
+      client_secret: getSquareAppSecret(),
+      grant_type: "refresh_token",
+      refresh_token: refreshToken
+    })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Square token refresh failed: ${errorText}`);
   }
 
   return response.json() as Promise<{

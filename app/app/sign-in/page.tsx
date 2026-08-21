@@ -25,6 +25,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
 
   const params = await searchParams;
   const nextPath = params?.next?.startsWith("/") ? params.next : routing.dashboardPath;
+  const heading = nextPath === routing.dashboardPath ? "Sign in to your customer account" : "Continue to your workspace";
+  const intro =
+    nextPath === routing.dashboardPath
+      ? "Manage time card notifications, Square setup, and billing from one place."
+      : "Sign in to return to the page you were trying to open.";
 
   return (
     <>
@@ -32,52 +37,43 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
       <main className="shell auth-page">
         <section className="auth-grid">
           <article className="dashboard-card auth-card">
-            <div className="eyebrow">App Sign-In</div>
-            <h1>Sign in to the customer app</h1>
-            <p>
-              Better Auth is now wired in for email/password authentication,
-              and Google sign-in can be enabled from your environment settings.
-            </p>
+            <div className="eyebrow">Customer Access</div>
+            <h1>{heading}</h1>
+            <p>{intro}</p>
             <AuthForm googleEnabled={googleEnabled} nextPath={nextPath} />
           </article>
 
           <aside className="dashboard-card auth-card">
-            <div className="eyebrow">Better Auth</div>
-            <h2>What changed</h2>
+            <div className="eyebrow">What You Can Do</div>
+            <h2>Everything important lives in one place</h2>
             <p>
-              The temporary cookie-only auth flow is gone. Authentication now
-              runs through Better Auth endpoints backed by Neon-hosted
-              Postgres, and the app is ready for Google OAuth too.
+              Once you are signed in, your dashboard gives you one place to
+              manage notification setup, delivery testing, subscriptions, and
+              account details.
+            </p>
+            <ul className="checklist compact-list">
+              <li>Review your Time Card Manager notification settings.</li>
+              <li>Connect Square and test live missed clock-out alerts.</li>
+              <li>Manage your subscription, sender address, and account phone number.</li>
+            </ul>
+            <p>
+              Use email and password today. Google sign-in can be turned on
+              later if you decide to offer it.
             </p>
             <div className="credential-list">
               <div className="credential-item">
-                <strong>Database</strong>
-                <code>Neon Postgres via DATABASE_URL</code>
+                <strong>Need a new account?</strong>
+                Create one from the same form using the toggle above.
               </div>
               <div className="credential-item">
-                <strong>Auth route</strong>
-                <code>/api/auth/*</code>
-              </div>
-            </div>
-            <p>
-              Google OAuth needs a Google Cloud OAuth client with the Better
-              Auth callback URL registered before the button will appear here.
-            </p>
-            <div className="credential-list">
-              <div className="credential-item">
-                <strong>Local callback</strong>
-                <code>http://localhost:3000/api/auth/callback/google</code>
-              </div>
-              <div className="credential-item">
-                <strong>Production callback</strong>
-                <code>https://app.slpcc63.com/api/auth/callback/google</code>
+                <strong>Need help?</strong>
+                If something looks off after sign-in, the dashboard will guide you to the next setup step.
               </div>
             </div>
             {isPreviewDeployment() ? (
               <p>
                 Preview deployments stay on their Vercel URL, so Google sign-in
-                is hidden there unless you explicitly register that preview URL
-                in Google Cloud.
+                remains hidden there unless that preview URL is explicitly registered.
               </p>
             ) : null}
           </aside>

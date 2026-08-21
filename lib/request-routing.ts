@@ -26,7 +26,7 @@ export async function getPublicRouting() {
   const signInPath = `/sign-in?next=${encodeURIComponent(dashboardPath)}`;
   const launchProductHref = preview
     ? `/sign-in?next=${encodeURIComponent("/app/dashboard")}`
-    : `${process.env.NEXT_PUBLIC_APP_URL ?? "https://app.slpcc63.com"}/sign-in?next=/dashboard`;
+    : `${process.env.NEXT_PUBLIC_APP_URL ?? "https://hosted-saas.vercel.app"}/sign-in?next=/dashboard`;
   const marketingHref = preview || !appHost ? "/" : getMarketingOrigin();
 
   return {

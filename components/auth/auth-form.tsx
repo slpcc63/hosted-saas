@@ -1,7 +1,6 @@
 "use client";
 
 import type { FormEvent } from "react";
-import Link from "next/link";
 import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
@@ -12,7 +11,7 @@ type AuthFormProps = {
 };
 
 export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-up");
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -172,15 +171,6 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
               : "Sign in"}
         </button>
       </form>
-
-      <p className="auth-helper">
-        {mode === "sign-up"
-          ? "This will create the first real app user in the Better Auth database."
-          : "Use the account you created here to access the protected app routes."}
-      </p>
-      <Link className="pill" href={nextPath}>
-        Dashboard after sign-in
-      </Link>
     </div>
   );
 }

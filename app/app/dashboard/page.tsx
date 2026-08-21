@@ -4,7 +4,10 @@ import { isAdmin } from "@/lib/authorization";
 import { getOrCreateCustomerProfile } from "@/lib/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";
-import { getTimeCardManagerOverview } from "@/lib/square-time-card-manager";
+import {
+  getTimeCardManagerOverview,
+  getTimeCardManagerSquareStatus
+} from "@/lib/square-time-card-manager";
 
 type DashboardPageProps = {
   searchParams?: Promise<{
@@ -27,9 +30,85 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const admin = await isAdmin(session.user.id);
   const params = await searchParams;
   const displayName = customer.contactName ?? customer.companyName ?? session.user.email;
-  const timeCardOverview = await getTimeCardManagerOverview(customer.id);
+  const [timeCardOverview, squareStatus] = await Promise.all([
+    getTimeCardManagerOverview(customer.id),
+    getTimeCardManagerSquareStatus(customer.id)
+  ]);
   const timeCardPath = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
   const subscriptionsPath = routing.appHost ? "/subscriptions" : "/app/subscriptions";
+  const accountPath = routing.appHost ? "/account" : "/app/account";
+  const hasSubscription = Boolean(timeCardOverview.entitlement);
+  const hasPhone = Boolean(customer.phone?.trim());
+  const squareReady = squareStatus.connected && squareStatus.missingScopes.length === 0;
+  const scheduleReady = timeCardOverview.scheduleEntries.length > 0;
+
+  const setupSteps = [
+    {
+      label: "Choose a Time Card Manager plan",
+      done: hasSubscription,
+      detail: hasSubscription
+        ? timeCardOverview.entitlement?.packageName ?? "Active plan"
+        : "Pick a subscription to unlock setup controls."
+    },
+    {
+      label: "Connect Square",
+      done: squareReady,
+      detail: squareReady
+        ? "Labor permissions are ready for live scans."
+        : squareStatus.connected
+          ? "Reconnect Square to add labor permissions."
+          : "Connect Square before running live timecard scans."
+    },
+    {
+      label: "Add a notification phone number",
+      done: hasPhone,
+      detail: hasPhone
+        ? customer.phone ?? "Phone saved"
+        : "Save a phone number if you want test texts or text delivery later."
+    },
+    {
+      label: "Schedule your first automated run",
+      done: scheduleReady,
+      detail: scheduleReady
+        ? timeCardOverview.nextRunLabel ?? "Automation schedule saved"
+        : "Add at least one weekly run so automation knows when to scan."
+    }
+  ];
+
+  const nextStep = !hasSubscription
+    ? {
+        title: "Choose your subscription",
+        body: "Start with a Time Card Manager plan so the rest of the setup flow becomes available.",
+        href: subscriptionsPath,
+        label: "Choose a plan"
+      }
+    : !squareReady
+      ? {
+          title: "Connect Square",
+          body: "Link your Square account so live missed clock-out detection can read labor data.",
+          href: timeCardPath,
+          label: "Open Time Card Manager"
+        }
+      : !hasPhone
+        ? {
+            title: "Add your contact phone",
+            body: "Save the phone number you want to use for test texts and future text notifications.",
+            href: accountPath,
+            label: "Update account"
+          }
+        : !scheduleReady
+          ? {
+              title: "Set your automation schedule",
+              body: "Choose when the Time Card Manager should automatically scan Square and send alerts.",
+              href: timeCardPath,
+              label: "Set schedule"
+            }
+          : {
+              title: "Review notification settings",
+              body: "Your core setup is in place. Fine-tune delivery mode, test notifications, and review recent activity.",
+              href: timeCardPath,
+              label: "Open Time Card Manager"
+            };
 
   return (
     <>
@@ -40,8 +119,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <section className="dashboard-card">
             <h1>{displayName} dashboard</h1>
             <p>
-              This dashboard is tied to your customer account, subscription
-              status, and current Time Card Manager setup.
+              Use this dashboard to see what is already configured and what
+              should happen next.
             </p>
             {timeCardOverview.alertMessage ? (
               <div className="dashboard-alert warning">
@@ -78,9 +157,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               </div>
             </div>
             <div className="metric">
-              <strong>Customer Profile</strong>
-              Your account profile is the source of truth for billing, Square
-              access, and plugin settings.
+              <strong>Next step</strong>
+              {nextStep.title}
+              <p>{nextStep.body}</p>
+              <div className="subscription-actions">
+                <a className="pill primary" href={nextStep.href}>
+                  {nextStep.label}
+                </a>
+              </div>
             </div>
             <div className="stack-list">
               <article className="dashboard-subcard">
@@ -127,7 +211,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                     </div>
                     <div className="subscription-actions">
                       <a className="pill primary" href={timeCardPath}>
-                        Manage time card settings
+                        Open Time Card Manager
                       </a>
                       <a className="pill" href={subscriptionsPath}>
                         Manage subscription
@@ -146,25 +230,32 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </section>
 
           <aside className="dashboard-card">
-            <h2>Current focus</h2>
+            <h2>Setup checklist</h2>
             <p>
-              The current product work is focused on the Square Time Card
-              Manager. Anything not explicitly approved stays out of the
-              customer-facing offering until it is planned.
+              Work through these in order. The checklist makes it easier to see
+              what is finished and what is still blocking live notification flow.
             </p>
-            <ul className="checklist compact-list">
-              <li>Customer settings are tied to the signed-in account.</li>
-              <li>Subscription details stay connected to the customer profile.</li>
-              <li>Square connection work is being aligned to the same ownership model.</li>
-            </ul>
+            <div className="stack-list">
+              {setupSteps.map((step) => (
+                <article className="dashboard-subcard" key={step.label}>
+                  <div className="subcard-header">
+                    <div>
+                      <h2>{step.label}</h2>
+                      <p>{step.detail}</p>
+                    </div>
+                    <span className="status-chip">{step.done ? "done" : "next"}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
             <div className="metric">
-              <strong>Customer ID</strong>
-              {customer.id}
+              <strong>Account profile</strong>
+              Billing, Square access, sender details, and notification delivery all follow this signed-in customer account.
             </div>
             {admin ? (
               <div className="metric">
                 <strong>Admin Access</strong>
-                Your account can open internal admin product tools.
+                Your account can also open internal admin product tools.
               </div>
             ) : null}
           </aside>

@@ -23,12 +23,10 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
         <div className="eyebrow">Account Settings</div>
         <div className="dashboard-grid">
           <section className="dashboard-card">
-            <h1>Profile and account details</h1>
+            <h1>Account details</h1>
             <p>
-              This is the first editable customer settings screen tied to the
-              new account model. It gives you a simple place to store the
-              identity details that future billing, subscriptions, and support
-              screens will reuse.
+              Keep your company, contact, and phone details current so billing,
+              notifications, and support all use the right information.
             </p>
             {params?.saved === "profile" ? (
               <p className="form-success">Profile saved successfully.</p>
@@ -51,6 +49,10 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                 Phone
                 <input defaultValue={customer.phone ?? ""} name="phone" type="tel" />
               </label>
+              <p className="auth-helper">
+                This phone number is used for Time Card Manager text notifications and test
+                texts when SMS is enabled in your package.
+              </p>
               <button className="pill primary pill-button" type="submit">
                 Save profile
               </button>
@@ -58,7 +60,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           </section>
 
           <aside className="dashboard-card">
-            <h2>Account status</h2>
+            <h2>How this is used</h2>
             <div className="stat-row compact">
               <div className="stat">
                 <strong>Status</strong>
@@ -70,8 +72,8 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
               </div>
             </div>
             <ul className="checklist compact-list">
-              <li>Next step here: billing profile and payment methods.</li>
-              <li>Later step: notification preferences and support settings.</li>
+              <li>Your email is the default destination for live notification emails.</li>
+              <li>Your phone number is used for test texts and text notifications.</li>
             </ul>
           </aside>
         </div>

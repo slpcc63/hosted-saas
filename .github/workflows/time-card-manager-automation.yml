@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Trigger production automation route
         env:
-          AUTOMATION_URL: https://app.slpcc63.com/api/cron/time-card-manager
+          AUTOMATION_URL: https://hosted-saas.vercel.app/api/cron/time-card-manager
           CRON_SECRET: ${{ secrets.TIME_CARD_AUTOMATION_CRON_SECRET }}
         run: |
           if [ -z "${CRON_SECRET}" ]; then

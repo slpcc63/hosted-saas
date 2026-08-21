@@ -9,6 +9,11 @@ import {
   resolveManagedSenderEmail,
   sendTransactionalEmail
 } from "@/lib/email";
+import {
+  isTransactionalTextingConfigured,
+  normalizePhoneNumber,
+  sendTransactionalText
+} from "@/lib/sms";
 import { getSquareConnectionByCustomerId } from "@/lib/square-connections";
 import {
   hasSquareScopes,
@@ -65,6 +70,20 @@ export type TimeCardManagerTextUsage = {
   updatedAt: Date;
 };
 
+export type TimeCardManagerDeliveryChannel = "email" | "text";
+export type TimeCardManagerDeliveryStatus = "sent" | "failed" | "blocked";
+
+export type TimeCardManagerDeliveryLogEntry = {
+  channel: TimeCardManagerDeliveryChannel;
+  createdAt: Date;
+  customerId: string;
+  errorMessage: string | null;
+  eventType: string;
+  id: string;
+  recipient: string;
+  status: TimeCardManagerDeliveryStatus;
+};
+
 export type TimeCardManagerEntitlement = {
   billingPeriodEnd: Date;
   billingPeriodStart: Date;
@@ -108,6 +127,7 @@ export type TimeCardManagerOverview = {
   delivery: TimeCardDeliveryEvaluation;
   entitlement: TimeCardManagerEntitlement | null;
   nextRunLabel: string | null;
+  recentDeliveries: TimeCardManagerDeliveryLogEntry[];
   scheduleEntries: TimeCardManagerScheduleEntry[];
   senderProfile: TimeCardManagerSenderProfile;
   settings: TimeCardManagerSettings;
@@ -151,6 +171,7 @@ let timeCardManagerScheduleTableReady: Promise<void> | null = null;
 let timeCardManagerUsageTableReady: Promise<void> | null = null;
 let timeCardManagerAutomationRunsTableReady: Promise<void> | null = null;
 let timeCardManagerAlertLogTableReady: Promise<void> | null = null;
+let timeCardManagerDeliveryLogTableReady: Promise<void> | null = null;
 
 function getDefaultPluginInstallConfig() {
   return {
@@ -161,7 +182,10 @@ function getDefaultPluginInstallConfig() {
 }
 
 export function isTimeCardManagerTextingLive() {
-  return process.env.TIME_CARD_TEXTING_LIVE === "true";
+  return (
+    process.env.TIME_CARD_TEXTING_LIVE !== "false" &&
+    isTransactionalTextingConfigured()
+  );
 }
 
 export function isTimeCardManagerAutomationLive() {
@@ -233,6 +257,23 @@ function mapUsage(row: Record<string, unknown>): TimeCardManagerTextUsage {
   };
 }
 
+function mapDeliveryLogEntry(row: Record<string, unknown>): TimeCardManagerDeliveryLogEntry {
+  return {
+    id: String(row.id),
+    customerId: String(row.customer_id),
+    eventType: String(row.event_type),
+    channel: String(row.channel) === "text" ? "text" : "email",
+    status: String(row.status) === "failed"
+      ? "failed"
+      : String(row.status) === "blocked"
+        ? "blocked"
+        : "sent",
+    recipient: String(row.recipient),
+    errorMessage: typeof row.error_message === "string" ? row.error_message : null,
+    createdAt: new Date(String(row.created_at))
+  };
+}
+
 function sortScheduleEntries(entries: TimeCardManagerScheduleEntry[]) {
   return [...entries].sort((left, right) => {
     if (left.dayOfWeek !== right.dayOfWeek) {
@@ -278,7 +319,7 @@ function buildAlertMessage(input: {
   }
 
   if (input.delivery.textingBlockedReason === "provider_unavailable") {
-    return "Text notifications are approved in your package, but the SMS provider is not active in phase 1 yet. Email notifications remain the live delivery path for now.";
+    return "Text notifications are included in your package, but SMS delivery is not configured in this deployment yet. Email notifications remain available where enabled.";
   }
 
   if (input.delivery.textingBlockedReason === "texting_not_included") {
@@ -338,6 +379,16 @@ function getNotificationDisplayName(customer: Pick<CustomerProfile, "companyName
   }
 
   return "SLPCC63 Notifications";
+}
+
+function getCustomerNotificationPhone(customer: Pick<CustomerProfile, "phone">) {
+  const normalized = normalizePhoneNumber(customer.phone ?? "");
+
+  if (!normalized) {
+    throw new Error("A valid customer phone number is required before sending text notifications");
+  }
+
+  return normalized;
 }
 
 function formatOptionalLine(label: string, value?: string | null) {
@@ -601,6 +652,77 @@ export async function ensureTimeCardManagerAlertLogTable() {
   return timeCardManagerAlertLogTableReady;
 }
 
+export async function ensureTimeCardManagerDeliveryLogTable() {
+  await ensureCustomerProfilesTable();
+
+  if (!timeCardManagerDeliveryLogTableReady) {
+    timeCardManagerDeliveryLogTableReady = db.query(`
+      create extension if not exists pgcrypto;
+
+      create table if not exists public.square_time_card_manager_delivery_log (
+        id uuid primary key default gen_random_uuid(),
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        event_type text not null,
+        channel text not null check (channel in ('email', 'text')),
+        status text not null check (status in ('sent', 'failed', 'blocked')),
+        recipient text not null,
+        error_message text,
+        created_at timestamptz not null default now()
+      );
+    `).then(() => undefined);
+  }
+
+  return timeCardManagerDeliveryLogTableReady;
+}
+
+async function recordTimeCardManagerDeliveryLog(input: {
+  channel: TimeCardManagerDeliveryChannel;
+  customerId: string;
+  errorMessage?: string | null;
+  eventType: string;
+  recipient: string;
+  status: TimeCardManagerDeliveryStatus;
+}) {
+  await ensureTimeCardManagerDeliveryLogTable();
+
+  const result = await db.query(
+    `insert into public.square_time_card_manager_delivery_log (
+      customer_id,
+      event_type,
+      channel,
+      status,
+      recipient,
+      error_message
+    ) values ($1, $2, $3, $4, $5, $6)
+    returning id, customer_id, event_type, channel, status, recipient, error_message, created_at`,
+    [
+      input.customerId,
+      input.eventType,
+      input.channel,
+      input.status,
+      input.recipient,
+      input.errorMessage ?? null
+    ]
+  );
+
+  return mapDeliveryLogEntry(result.rows[0]);
+}
+
+export async function getRecentTimeCardManagerDeliveries(customerId: string, limit = 8) {
+  await ensureTimeCardManagerDeliveryLogTable();
+
+  const result = await db.query(
+    `select id, customer_id, event_type, channel, status, recipient, error_message, created_at
+     from public.square_time_card_manager_delivery_log
+     where customer_id = $1
+     order by created_at desc
+     limit $2`,
+    [customerId, limit]
+  );
+
+  return result.rows.map((row) => mapDeliveryLogEntry(row));
+}
+
 export async function getTimeCardManagerSettings(customerId: string) {
   await ensureTimeCardManagerSettingsTable();
 
@@ -860,14 +982,15 @@ export async function recordTimeCardManagerTextUsage(input: {
 export async function getTimeCardManagerOverview(customerId: string) {
   const automationLive = isTimeCardManagerAutomationLive();
   const textingLive = isTimeCardManagerTextingLive();
-  const [settings, scheduleEntries, subscription, delivery] = await Promise.all([
+  const [settings, scheduleEntries, subscription, delivery, recentDeliveries] = await Promise.all([
     getOrCreateTimeCardManagerSettings(customerId),
     getTimeCardManagerScheduleEntries(customerId),
     getActiveSubscriptionForProduct({
       customerId,
       productSlug: timeCardManagerProductSlug
     }),
-    evaluateTimeCardManagerDelivery({ customerId })
+    evaluateTimeCardManagerDelivery({ customerId }),
+    getRecentTimeCardManagerDeliveries(customerId)
   ]);
   const entitlement = buildEntitlement(subscription);
   const currentUsage = await getTimeCardManagerCurrentUsage({
@@ -879,6 +1002,7 @@ export async function getTimeCardManagerOverview(customerId: string) {
   return {
     settings,
     scheduleEntries,
+    recentDeliveries,
     entitlement,
     currentUsage,
     delivery,
@@ -1011,6 +1135,7 @@ async function getAutomationDueEntries(now: Date) {
        schedules.created_at,
        schedules.updated_at,
        customers.email,
+       customers.phone,
        customers.company_name,
        customers.contact_name
      from public.square_time_card_manager_schedule_entries schedules
@@ -1027,14 +1152,15 @@ async function getAutomationDueEntries(now: Date) {
   return result.rows
     .map((row) => ({
       scheduleEntry: mapScheduleEntry(row),
-      customer: {
-        id: String(row.customer_id),
-        email: String(row.email),
-        companyName:
-          typeof row.company_name === "string" ? row.company_name : null,
-        contactName:
-          typeof row.contact_name === "string" ? row.contact_name : null
-      }
+       customer: {
+          id: String(row.customer_id),
+          email: String(row.email),
+          phone: typeof row.phone === "string" ? row.phone : null,
+          companyName:
+            typeof row.company_name === "string" ? row.company_name : null,
+          contactName:
+            typeof row.contact_name === "string" ? row.contact_name : null
+        }
     }))
     .filter(({ scheduleEntry }) =>
       isScheduleEntryDueInWindow({
@@ -1096,17 +1222,17 @@ export async function runTimeCardManagerAutomationBatch(input?: {
         continue;
       }
 
-      if (!overview.delivery.canSendEmail) {
+      if (!overview.delivery.canSendEmail && !overview.delivery.canSendText) {
         await finalizeTimeCardManagerAutomationRun({
           runId: startedRun.id,
-          status: "skipped_email_disabled",
+          status: "skipped_delivery_disabled",
           candidateCount: 0,
           alertsSentCount: 0
         });
         runs.push({
           customerId: entry.customer.id,
           scheduleEntryId: entry.scheduleEntry.id,
-          status: "skipped_email_disabled",
+          status: "skipped_delivery_disabled",
           alertsSentCount: 0,
           errorMessage: null
         });
@@ -1126,7 +1252,7 @@ export async function runTimeCardManagerAutomationBatch(input?: {
       );
 
       for (const candidate of unsentCandidates) {
-        await sendTimeCardManagerMissedClockOutEmail({
+        await sendTimeCardManagerMissedClockOutNotification({
           customer: entry.customer,
           employeeName: candidate.teamMemberName,
           shiftDate: candidate.shiftDateLabel,
@@ -1195,16 +1321,101 @@ export async function runTimeCardManagerAutomationBatch(input?: {
   } satisfies TimeCardManagerAutomationBatchResult;
 }
 
+function buildMissedClockOutMessage(input: {
+  clockInTime: string;
+  companyName: string;
+  employeeName: string;
+  expectedClockOutTime?: string | null;
+  locationName?: string | null;
+  shiftDate: string;
+}) {
+  const employeeName = input.employeeName.trim();
+  const shiftDate = input.shiftDate.trim();
+  const clockInTime = input.clockInTime.trim();
+  const expectedClockOutTime = input.expectedClockOutTime?.trim() || null;
+  const locationName = input.locationName?.trim() || null;
+  const subject = `${input.companyName}: missed clock-out alert for ${employeeName}`;
+  const htmlListItems = [
+    `<li><strong>Employee:</strong> ${escapeHtml(employeeName)}</li>`,
+    `<li><strong>Shift date:</strong> ${escapeHtml(shiftDate)}</li>`,
+    `<li><strong>Clock-in time:</strong> ${escapeHtml(clockInTime)}</li>`,
+    formatOptionalLine("Expected clock-out", expectedClockOutTime),
+    formatOptionalLine("Location", locationName)
+  ]
+    .filter(Boolean)
+    .join("");
+  const html = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2933;">
+      <h1 style="margin-bottom: 0.5rem;">Missed clock-out alert</h1>
+      <p>
+        ${escapeHtml(employeeName)} appears to still be clocked in and may need a
+        time card review.
+      </p>
+      <ul>${htmlListItems}</ul>
+      <p>
+        This missed clock-out alert follows your current Time Card Manager
+        delivery settings and subscription limits.
+      </p>
+    </div>
+  `;
+  const text = [
+    "Missed clock-out alert",
+    "",
+    `${employeeName} appears to still be clocked in and may need a time card review.`,
+    "",
+    `Employee: ${employeeName}`,
+    `Shift date: ${shiftDate}`,
+    `Clock-in time: ${clockInTime}`,
+    expectedClockOutTime ? `Expected clock-out: ${expectedClockOutTime}` : null,
+    locationName ? `Location: ${locationName}` : null
+  ]
+    .filter(Boolean)
+    .join("\n");
+  const sms = [
+    `${input.companyName}: missed clock-out alert`,
+    `${employeeName} may still be clocked in.`,
+    `Shift date: ${shiftDate}`,
+    `Clock in: ${clockInTime}`,
+    expectedClockOutTime ? `Expected out: ${expectedClockOutTime}` : null,
+    locationName ? `Location: ${locationName}` : null
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    subject,
+    html,
+    text,
+    sms
+  };
+}
+
 export async function sendTimeCardManagerTestEmail(input: {
   customer: Pick<CustomerProfile, "companyName" | "contactName" | "email" | "id">;
 }) {
   const overview = await getTimeCardManagerOverview(input.customer.id);
 
   if (!overview.entitlement) {
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "email",
+      status: "blocked",
+      recipient: input.customer.email,
+      errorMessage: "No active Time Card Manager subscription"
+    });
     throw new Error("An active Time Card Manager subscription is required before sending email");
   }
 
   if (!overview.delivery.canSendEmail) {
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "email",
+      status: "blocked",
+      recipient: input.customer.email,
+      errorMessage: "Email delivery disabled by notification mode"
+    });
     throw new Error("Email delivery is not enabled for the current notification mode");
   }
 
@@ -1230,8 +1441,9 @@ export async function sendTimeCardManagerTestEmail(input: {
         <li><strong>Recipient:</strong> ${escapeHtml(recipientEmail)}</li>
       </ul>
       <p>
-        Scheduled automation and SMS delivery are still separate follow-up steps, but
-        the managed sender and Resend-backed email path are now working from the app.
+        The managed sender, live email delivery path, and scheduled automation
+        flow are wired in the app. SMS delivery follows the same settings once
+        carrier approval is complete.
       </p>
     </div>
   `;
@@ -1247,14 +1459,113 @@ export async function sendTimeCardManagerTestEmail(input: {
     "This confirms that the managed sender and email delivery path are active."
   ].join("\n");
 
-  return sendTransactionalEmail({
-    fromEmail: senderAddress,
-    fromName: senderName,
-    subject,
-    html,
-    text,
-    to: recipientEmail
-  });
+  try {
+    const result = await sendTransactionalEmail({
+      fromEmail: senderAddress,
+      fromName: senderName,
+      subject,
+      html,
+      text,
+      to: recipientEmail
+    });
+
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "email",
+      status: "sent",
+      recipient: recipientEmail
+    });
+
+    return result;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Email delivery failed";
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "email",
+      status: "failed",
+      recipient: recipientEmail,
+      errorMessage: message
+    });
+    throw error;
+  }
+}
+
+export async function sendTimeCardManagerTestText(input: {
+  customer: Pick<CustomerProfile, "companyName" | "contactName" | "email" | "id" | "phone">;
+}) {
+  const overview = await getTimeCardManagerOverview(input.customer.id);
+
+  if (!overview.entitlement) {
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "text",
+      status: "blocked",
+      recipient: input.customer.phone ?? "missing phone",
+      errorMessage: "No active Time Card Manager subscription"
+    });
+    throw new Error("An active Time Card Manager subscription is required before sending text");
+  }
+
+  if (!overview.delivery.canSendText) {
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "text",
+      status: "blocked",
+      recipient: input.customer.phone ?? "missing phone",
+      errorMessage:
+        overview.delivery.textingBlockedReason === "provider_unavailable"
+          ? "SMS provider pending carrier approval or deployment setup"
+          : "Text delivery disabled by notification mode"
+    });
+    throw new Error("Text delivery is not enabled for the current notification mode");
+  }
+
+  const recipientPhone = getCustomerNotificationPhone(input.customer);
+  const senderName = getNotificationDisplayName(input.customer);
+  const currentPackage = overview.entitlement.packageName;
+  const currentMode = overview.delivery.effectiveMode.replaceAll("_", " ");
+  const nextRun = overview.nextRunLabel ?? "No scheduled run configured";
+
+  try {
+    await sendTransactionalText({
+      to: recipientPhone,
+      body: [
+        `${senderName} Time Card Manager test text`,
+        `Package: ${currentPackage}`,
+        `Mode: ${currentMode}`,
+        `Next run: ${nextRun}`,
+        `Recipient: ${recipientPhone}`
+      ].join("\n")
+    });
+
+    await recordTimeCardManagerTextUsage({
+      customerId: input.customer.id,
+      sentCount: 1
+    });
+
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "text",
+      status: "sent",
+      recipient: recipientPhone
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Text delivery failed";
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "test_notification",
+      channel: "text",
+      status: "failed",
+      recipient: recipientPhone,
+      errorMessage: message
+    });
+    throw error;
+  }
 }
 
 export async function sendTimeCardManagerMissedClockOutEmail(input: {
@@ -1335,6 +1646,131 @@ export async function sendTimeCardManagerMissedClockOutEmail(input: {
     text,
     to: recipientEmail
   });
+}
+
+export async function sendTimeCardManagerMissedClockOutNotification(input: {
+  clockInTime: string;
+  customer: Pick<
+    CustomerProfile,
+    "companyName" | "contactName" | "email" | "id" | "phone"
+  >;
+  employeeName: string;
+  expectedClockOutTime?: string;
+  locationName?: string;
+  shiftDate: string;
+}) {
+  const overview = await getTimeCardManagerOverview(input.customer.id);
+
+  if (!overview.entitlement) {
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "missed_clock_out",
+      channel: "email",
+      status: "blocked",
+      recipient: input.customer.email,
+      errorMessage: "No active Time Card Manager subscription"
+    });
+    throw new Error("An active Time Card Manager subscription is required before sending notifications");
+  }
+
+  if (!overview.delivery.canSendEmail && !overview.delivery.canSendText) {
+    await recordTimeCardManagerDeliveryLog({
+      customerId: input.customer.id,
+      eventType: "missed_clock_out",
+      channel: overview.settings.notificationMode === "text_only" ? "text" : "email",
+      status: "blocked",
+      recipient:
+        overview.settings.notificationMode === "text_only"
+          ? input.customer.phone ?? "missing phone"
+          : input.customer.email,
+      errorMessage:
+        overview.delivery.textingBlockedReason === "provider_unavailable"
+          ? "SMS provider pending carrier approval or deployment setup"
+          : "Notification delivery disabled by current settings"
+    });
+    throw new Error("Notification delivery is not enabled for the current notification mode");
+  }
+
+  const senderName = getNotificationDisplayName(input.customer);
+  const senderAddress = overview.senderProfile.fromEmail;
+  const recipientEmail = input.customer.email;
+  const recipientPhone = overview.delivery.canSendText
+    ? getCustomerNotificationPhone(input.customer)
+    : null;
+  const companyName = input.customer.companyName?.trim() || "Your team";
+  const message = buildMissedClockOutMessage({
+    companyName,
+    employeeName: input.employeeName,
+    shiftDate: input.shiftDate,
+    clockInTime: input.clockInTime,
+    expectedClockOutTime: input.expectedClockOutTime,
+    locationName: input.locationName
+  });
+
+  if (overview.delivery.canSendEmail) {
+    try {
+      await sendTransactionalEmail({
+        fromEmail: senderAddress,
+        fromName: senderName,
+        subject: message.subject,
+        html: message.html,
+        text: `${message.text}\n\nSender: ${senderAddress}`,
+        to: recipientEmail
+      });
+
+      await recordTimeCardManagerDeliveryLog({
+        customerId: input.customer.id,
+        eventType: "missed_clock_out",
+        channel: "email",
+        status: "sent",
+        recipient: recipientEmail
+      });
+    } catch (error) {
+      const emailError = error instanceof Error ? error.message : "Email delivery failed";
+      await recordTimeCardManagerDeliveryLog({
+        customerId: input.customer.id,
+        eventType: "missed_clock_out",
+        channel: "email",
+        status: "failed",
+        recipient: recipientEmail,
+        errorMessage: emailError
+      });
+      throw error;
+    }
+  }
+
+  if (overview.delivery.canSendText && recipientPhone) {
+    try {
+      await sendTransactionalText({
+        to: recipientPhone,
+        body: message.sms
+      });
+
+      await recordTimeCardManagerTextUsage({
+        customerId: input.customer.id,
+        sentCount: 1
+      });
+
+      await recordTimeCardManagerDeliveryLog({
+        customerId: input.customer.id,
+        eventType: "missed_clock_out",
+        channel: "text",
+        status: "sent",
+        recipient: recipientPhone
+      });
+    } catch (error) {
+      const textError = error instanceof Error ? error.message : "Text delivery failed";
+      await recordTimeCardManagerDeliveryLog({
+        customerId: input.customer.id,
+        eventType: "missed_clock_out",
+        channel: "text",
+        status: "failed",
+        recipient: recipientPhone,
+        errorMessage: textError
+      });
+      throw error;
+    }
+  }
 }
 
 export const requiredSquareLaborScopes = ["TIMECARDS_READ", "EMPLOYEES_READ"] as const;

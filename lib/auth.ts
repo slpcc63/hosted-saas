@@ -10,11 +10,22 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const appUrl = getAppOrigin();
 const marketingUrl = getMarketingOrigin();
 
+function buildTrustedOrigins() {
+  const origins = new Set<string>([appUrl, marketingUrl]);
+  const vercelProductionUrl = "https://hosted-saas.vercel.app";
+  const legacyCustomAppUrl = "https://app.slpcc63.com";
+
+  origins.add(vercelProductionUrl);
+  origins.add(legacyCustomAppUrl);
+
+  return [...origins];
+}
+
 export const auth = betterAuth({
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? "SLPCC63",
   secret: authSecret,
   baseURL: getBetterAuthOrigin(),
-  trustedOrigins: [appUrl, marketingUrl],
+  trustedOrigins: buildTrustedOrigins(),
   database: db,
   emailAndPassword: {
     enabled: true,

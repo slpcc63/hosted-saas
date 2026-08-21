@@ -5,6 +5,7 @@ import {
   scanSquareMissedClockOutsAction,
   sendTimeCardManagerMissedClockOutEmailAction,
   sendTimeCardManagerTestEmailAction,
+  sendTimeCardManagerTestTextAction,
   saveTimeCardManagerSenderAction,
   saveTimeCardManagerSettingsAction
 } from "@/app/app/actions";
@@ -31,6 +32,13 @@ function labelForDay(dayOfWeek: number) {
   return weekdayOptions.find((option) => option.value === dayOfWeek)?.label ?? "Day";
 }
 
+function labelForDeliveryEvent(eventType: string) {
+  return eventType
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 type TimeCardManagerPageProps = {
   searchParams?: Promise<{
     count?: string;
@@ -45,6 +53,7 @@ export default async function TimeCardManagerPage({
   const routing = await getPublicRouting();
   const redirectTo = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
   const subscriptionsPath = routing.appHost ? "/subscriptions" : "/app/subscriptions";
+  const accountPath = routing.appHost ? "/account" : "/app/account";
   const squareConnectHref = `/api/integrations/square/connect?plugin=square-time-card-manager`;
   const { customer } = await requireCurrentCustomer(redirectTo, "/app");
   await ensureSeedCatalog();
@@ -53,6 +62,39 @@ export default async function TimeCardManagerPage({
     getTimeCardManagerSquareStatus(customer.id)
   ]);
   const params = await searchParams;
+  const squareReady = squareStatus.connected && squareStatus.missingScopes.length === 0;
+  const hasPhone = Boolean(customer.phone?.trim());
+  const scheduleReady = overview.scheduleEntries.length > 0;
+  const setupSteps = [
+    {
+      label: "Subscription",
+      value: overview.entitlement ? "Active" : "Needed",
+      done: Boolean(overview.entitlement)
+    },
+    {
+      label: "Square access",
+      value: squareReady ? "Ready" : squareStatus.connected ? "Reconnect" : "Connect",
+      done: squareReady
+    },
+    {
+      label: "Phone",
+      value: hasPhone ? "Saved" : "Add phone",
+      done: hasPhone
+    },
+    {
+      label: "Schedule",
+      value: scheduleReady ? "Set" : "Not set",
+      done: scheduleReady
+    }
+  ];
+  const smsStatus = overview.textingLive
+    ? overview.entitlement?.textingEnabled
+      ? "Texting available"
+      : "Plan does not include texting"
+    : "Texting pending provider approval";
+  const deliveryModeLabel = overview.textingLive
+    ? overview.delivery.effectiveMode.replaceAll("_", " ")
+    : "email only";
 
   return (
     <>
@@ -61,13 +103,37 @@ export default async function TimeCardManagerPage({
         <div className="eyebrow">Square Time Card Manager</div>
         <div className="dashboard-grid">
           <section className="dashboard-card">
-            <h1>Notification controls</h1>
+            <h1>Time card notifications</h1>
             <p>
-              Phase 1 currently runs on live email notifications, manual Square
-              scans, and scheduled automation when cron is enabled in
-              production. Approved SMS stays visible here, but it is not active
-              until the texting provider is connected.
+              Manage how missed clock-out alerts are sent, test delivery, and
+              schedule automatic Square scans.
             </p>
+
+            <div className="setup-grid">
+              {setupSteps.map((step) => (
+                <div className="setup-step" key={step.label}>
+                  <span className="status-chip">{step.done ? "done" : "todo"}</span>
+                  <strong>{step.label}</strong>
+                  <p>{step.value}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="stat-row compact">
+              <div className="stat">
+                <strong>Delivery mode</strong>
+                {deliveryModeLabel}
+              </div>
+              <div className="stat">
+                <strong>Texts remaining</strong>
+                {overview.delivery.textsRemaining}
+              </div>
+              <div className="stat">
+                <strong>Next run</strong>
+                {overview.nextRunLabel ?? "Not scheduled"}
+              </div>
+            </div>
+
             {overview.alertMessage ? (
               <div className="dashboard-alert warning">
                 <strong>Notification limit reached</strong>
@@ -88,8 +154,8 @@ export default async function TimeCardManagerPage({
             ) : null}
             {params?.saved === "settings_sms_pending" ? (
               <p className="form-success">
-                Email settings saved. SMS remains approved but inactive until the
-                texting provider is connected.
+                Notification settings saved. Text-capable modes will stay disabled until
+                the SMS provider env vars are configured in the deployment.
               </p>
             ) : null}
             {params?.saved === "schedule" ? (
@@ -106,6 +172,9 @@ export default async function TimeCardManagerPage({
             ) : null}
             {params?.saved === "test_email" ? (
               <p className="form-success">Test email sent successfully.</p>
+            ) : null}
+            {params?.saved === "test_text" ? (
+              <p className="form-success">Test text sent successfully.</p>
             ) : null}
             {params?.saved === "missed_clock_out" ? (
               <p className="form-success">Missed clock-out alert sent successfully.</p>
@@ -151,6 +220,28 @@ export default async function TimeCardManagerPage({
                 sender configuration, then try again.
               </p>
             ) : null}
+            {params?.error === "test_text_subscription_missing" ? (
+              <p className="form-error">
+                Subscribe to the Time Card Manager before sending a test text.
+              </p>
+            ) : null}
+            {params?.error === "test_text_delivery_disabled" ? (
+              <p className="form-error">
+                Text delivery is disabled by the current notification mode. Switch to
+                Text only or Email and text to send a test text.
+              </p>
+            ) : null}
+            {params?.error === "test_text_phone_missing" ? (
+              <p className="form-error">
+                Add a valid phone number on your Account page before sending test texts.
+              </p>
+            ) : null}
+            {params?.error === "test_text_failed" ? (
+              <p className="form-error">
+                The test text could not be sent. Double-check the SMS provider setup,
+                your phone number, and any pending Twilio Trust Hub or A2P review.
+              </p>
+            ) : null}
             {params?.error === "missed_clock_out_invalid" ? (
               <p className="form-error">
                 Add an employee name, shift date, and clock-in time before sending a
@@ -170,8 +261,14 @@ export default async function TimeCardManagerPage({
             ) : null}
             {params?.error === "missed_clock_out_failed" ? (
               <p className="form-error">
-                The missed clock-out alert could not be sent. Double-check the email
-                setup and try again.
+                The missed clock-out alert could not be sent. Double-check the
+                notification setup and try again.
+              </p>
+            ) : null}
+            {params?.error === "missed_clock_out_phone_missing" ? (
+              <p className="form-error">
+                Add a valid phone number on your Account page before sending text-based
+                missed clock-out alerts.
               </p>
             ) : null}
             {params?.error === "square_scan_invalid" ? (
@@ -215,8 +312,8 @@ export default async function TimeCardManagerPage({
             {!overview.entitlement ? (
               <div className="metric">
                 <strong>No active subscription</strong>
-                Subscribe to the Square Time Card Manager before enabling
-                notification automation and texting controls.
+                Choose a Time Card Manager plan before enabling notification
+                delivery, Square scans, or automation.
                 <div className="subscription-actions">
                   <a className="pill primary" href={subscriptionsPath}>
                     View subscription plans
@@ -225,6 +322,13 @@ export default async function TimeCardManagerPage({
               </div>
             ) : (
               <>
+                <div className="section-heading">
+                  <div>
+                    <h2>Delivery preferences</h2>
+                    <p>Choose the channels this subscription should use for alerts.</p>
+                  </div>
+                  <span className="status-chip">{smsStatus}</span>
+                </div>
                 <form action={saveTimeCardManagerSettingsAction} className="auth-form">
                   <input name="redirectTo" type="hidden" value={redirectTo} />
                   <label className="field">
@@ -235,17 +339,17 @@ export default async function TimeCardManagerPage({
                     >
                       <option value="email_only">Email only</option>
                       <option disabled={!overview.textingLive} value="text_only">
-                        Text only{!overview.textingLive ? " (coming soon)" : ""}
+                        Text only{!overview.textingLive ? " (texting not available yet)" : ""}
                       </option>
                       <option disabled={!overview.textingLive} value="email_and_text">
-                        Email and text{!overview.textingLive ? " (coming soon)" : ""}
+                        Email and text{!overview.textingLive ? " (texting not available yet)" : ""}
                       </option>
                     </select>
                   </label>
                   {!overview.textingLive ? (
                     <p className="auth-helper">
-                      SMS is an approved follow-up capability, but phase 1 still sends through
-                      email only until the texting provider is configured.
+                      Texting is temporarily unavailable while Twilio carrier approval is
+                      pending. Email delivery and automation remain available.
                     </p>
                   ) : !overview.entitlement.textingEnabled ? (
                     <p className="auth-helper">
@@ -262,14 +366,12 @@ export default async function TimeCardManagerPage({
                     />
                     <span>
                       Enable automated runs
-                      {!overview.automationLive ? " (coming soon)" : ""}
                     </span>
                   </label>
                   {!overview.automationLive ? (
                     <p className="auth-helper">
-                      Automated runs are wired in-app, but they will stay off until
-                      `CRON_SECRET` is configured in Vercel and the scheduled GitHub
-                      Actions workflow is allowed to call this app.
+                      Automated runs are temporarily paused until the production cron
+                      configuration is available again.
                     </p>
                   ) : null}
                   <button className="pill primary pill-button" type="submit">
@@ -283,8 +385,8 @@ export default async function TimeCardManagerPage({
                       <div>
                         <h2>Email sender address</h2>
                         <p>
-                          Each subscription can claim one sender address on the shared
-                          `slpcc63.com` domain.
+                          Set the `@slpcc63.com` address customers see when
+                          email alerts arrive.
                         </p>
                       </div>
                       <span className="status-chip">
@@ -323,11 +425,42 @@ export default async function TimeCardManagerPage({
                         Send test email
                       </button>
                     </form>
+                    <form action={sendTimeCardManagerTestTextAction} className="inline-form">
+                      <input name="redirectTo" type="hidden" value={redirectTo} />
+                      <button className="pill pill-button" type="submit">
+                        Send test text
+                      </button>
+                    </form>
                     <p className="auth-helper">
-                      The test email goes to your account email and uses the same managed
-                      sender address the subscription will use for live notifications.
+                      Test email goes to your account email. Test text goes to the phone
+                      number saved on your Account page.
                     </p>
                   </article>
+
+                  {!hasPhone ? (
+                    <article className="dashboard-subcard">
+                      <div className="subcard-header">
+                        <div>
+                          <h2>Add a phone number</h2>
+                          <p>Text tests and text alerts need a valid account phone number.</p>
+                        </div>
+                        <span className="status-chip">needed</span>
+                      </div>
+                      <div className="subscription-actions">
+                        <a className="pill primary" href={accountPath}>
+                          Update account
+                        </a>
+                      </div>
+                    </article>
+                  ) : null}
+
+                  <div className="section-heading">
+                    <div>
+                      <h2>Square data</h2>
+                      <p>Connect Square and scan open timecards when you need an immediate check.</p>
+                    </div>
+                    <span className="status-chip">{squareReady ? "ready" : "setup needed"}</span>
+                  </div>
 
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
@@ -388,16 +521,24 @@ export default async function TimeCardManagerPage({
                     </form>
                   </article>
 
+                  <div className="section-heading">
+                    <div>
+                      <h2>Test alert</h2>
+                      <p>Send one sample notification through the current delivery settings.</p>
+                    </div>
+                    <span className="status-chip">manual test</span>
+                  </div>
+
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
                       <div>
                         <h2>Missed clock-out alert</h2>
                         <p>
-                          Send the first real event-shaped Time Card Manager email using
-                          sample shift details.
+                          Send a real missed clock-out notification using sample shift
+                          details and your current delivery mode.
                         </p>
                       </div>
-                      <span className="status-chip">email event</span>
+                      <span className="status-chip">live event</span>
                     </div>
                     <form action={sendTimeCardManagerMissedClockOutEmailAction} className="auth-form">
                       <input name="redirectTo" type="hidden" value={redirectTo} />
@@ -426,11 +567,17 @@ export default async function TimeCardManagerPage({
                       </button>
                     </form>
                     <p className="auth-helper">
-                      This still sends to your account email for now, but the content now
-                      matches a real Time Card Manager notification event instead of a
-                      generic delivery test.
+                      Email goes to your account email and text goes to your saved account
+                      phone number, following the current notification mode and text quota.
                     </p>
                   </article>
+
+                  <div className="section-heading">
+                    <div>
+                      <h2>Plan and usage</h2>
+                      <p>Review the current package and monthly text allowance.</p>
+                    </div>
+                  </div>
 
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
@@ -470,6 +617,75 @@ export default async function TimeCardManagerPage({
                       </a>
                     </div>
                   </article>
+
+                  <div className="section-heading">
+                    <div>
+                      <h2>Recent activity</h2>
+                      <p>See the latest delivery attempts and provider responses.</p>
+                    </div>
+                  </div>
+
+                  <article className="dashboard-subcard">
+                    <div className="subcard-header">
+                      <div>
+                        <h2>Recent delivery activity</h2>
+                        <p>
+                          Track whether notifications were sent, blocked, or failed while
+                          email and SMS setup evolves.
+                        </p>
+                      </div>
+                      <span className="status-chip">
+                        {overview.recentDeliveries.length} recent
+                      </span>
+                    </div>
+                    {overview.recentDeliveries.length ? (
+                      <div className="delivery-log" role="list">
+                        {overview.recentDeliveries.map((entry) => (
+                          <article className="delivery-log-row" key={entry.id} role="listitem">
+                            <div className="delivery-log-main">
+                              <div className="delivery-log-topline">
+                                <span className="delivery-log-channel">
+                                  {entry.channel === "text" ? "Text" : "Email"}
+                                </span>
+                                <strong>{labelForDeliveryEvent(entry.eventType)}</strong>
+                                <span className={`delivery-log-status ${entry.status}`}>
+                                  {entry.status}
+                                </span>
+                              </div>
+                              <p className="delivery-log-recipient">Sent to {entry.recipient}</p>
+                              <p className="delivery-log-time">
+                                {entry.createdAt.toLocaleString()}
+                              </p>
+                            </div>
+                            {entry.errorMessage ? (
+                              <p
+                                className={`delivery-log-detail ${
+                                  entry.status === "failed" ? "delivery-log-detail-error" : ""
+                                }`}
+                              >
+                                {entry.errorMessage}
+                              </p>
+                            ) : null}
+                          </article>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="auth-helper">
+                        No delivery attempts yet. Send a test email or test text to start
+                        building delivery history.
+                      </p>
+                    )}
+                  </article>
+
+                  <div className="section-heading">
+                    <div>
+                      <h2>Automation schedule</h2>
+                      <p>Choose the weekly windows for automatic Square scans.</p>
+                    </div>
+                    <span className="status-chip">
+                      {overview.scheduleEntries.length} scheduled
+                    </span>
+                  </div>
 
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
@@ -547,10 +763,10 @@ export default async function TimeCardManagerPage({
             <h2>Phase 1 status</h2>
             <ul className="checklist compact-list">
               <li>Email delivery is live today.</li>
-              <li>SMS is approved, but still waiting on the texting provider setup.</li>
+              <li>SMS delivery is wired in the app and waiting on Twilio carrier approval.</li>
               <li>
-                Automation runs are available once the production deployment has
-                `CRON_SECRET` configured and the GitHub Actions scheduler secret is set.
+                Automation runs are wired through the protected cron route and GitHub Actions
+                scheduler.
               </li>
             </ul>
             <div className="metric">

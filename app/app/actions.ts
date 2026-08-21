@@ -31,8 +31,9 @@ import {
   isTimeCardManagerTextingLive,
   normalizeNotificationMode,
   removeTimeCardManagerScheduleEntry,
-  sendTimeCardManagerMissedClockOutEmail,
+  sendTimeCardManagerMissedClockOutNotification,
   sendTimeCardManagerTestEmail,
+  sendTimeCardManagerTestText,
   upsertTimeCardManagerSettings
 } from "@/lib/square-time-card-manager";
 import {
@@ -401,6 +402,40 @@ export async function sendTimeCardManagerTestEmailAction(formData: FormData) {
   redirect(`${redirectTo}?saved=test_email`);
 }
 
+export async function sendTimeCardManagerTestTextAction(formData: FormData) {
+  const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
+  const session = await requireSession(redirectTo);
+  const customer = await getCustomerByUserId(session.user.id);
+
+  if (!customer) {
+    redirect("/app");
+  }
+
+  try {
+    await sendTimeCardManagerTestText({ customer });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to send test text";
+
+    if (message.includes("subscription")) {
+      redirect(`${redirectTo}?error=test_text_subscription_missing`);
+    }
+
+    if (message.includes("current notification mode")) {
+      redirect(`${redirectTo}?error=test_text_delivery_disabled`);
+    }
+
+    if (message.includes("phone number")) {
+      redirect(`${redirectTo}?error=test_text_phone_missing`);
+    }
+
+    redirect(`${redirectTo}?error=test_text_failed`);
+  }
+
+  revalidatePath("/app/time-card-manager");
+  revalidatePath("/app/dashboard");
+  redirect(`${redirectTo}?saved=test_text`);
+}
+
 export async function sendTimeCardManagerMissedClockOutEmailAction(formData: FormData) {
   const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
   const session = await requireSession(redirectTo);
@@ -421,7 +456,7 @@ export async function sendTimeCardManagerMissedClockOutEmailAction(formData: For
   }
 
   try {
-    await sendTimeCardManagerMissedClockOutEmail({
+    await sendTimeCardManagerMissedClockOutNotification({
       customer,
       employeeName,
       shiftDate,
@@ -430,7 +465,8 @@ export async function sendTimeCardManagerMissedClockOutEmailAction(formData: For
       locationName
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to send missed clock-out alert";
+    const message =
+      error instanceof Error ? error.message : "Unable to send missed clock-out alert";
 
     if (message.includes("subscription")) {
       redirect(`${redirectTo}?error=missed_clock_out_subscription_missing`);
@@ -438,6 +474,10 @@ export async function sendTimeCardManagerMissedClockOutEmailAction(formData: For
 
     if (message.includes("current notification mode")) {
       redirect(`${redirectTo}?error=missed_clock_out_delivery_disabled`);
+    }
+
+    if (message.includes("phone number")) {
+      redirect(`${redirectTo}?error=missed_clock_out_phone_missing`);
     }
 
     redirect(`${redirectTo}?error=missed_clock_out_failed`);
@@ -489,7 +529,7 @@ export async function scanSquareMissedClockOutsAction(formData: FormData) {
 
   try {
     for (const candidate of candidates) {
-      await sendTimeCardManagerMissedClockOutEmail({
+      await sendTimeCardManagerMissedClockOutNotification({
         customer,
         employeeName: candidate.teamMemberName,
         shiftDate: candidate.shiftDateLabel,
