@@ -1,5 +1,6 @@
 import {
   reviewTimeCardConfirmationRequestAction,
+  resendTimeCardConfirmationRequestAction,
   saveTimeCardConfirmationSettingsAction,
   saveTimeCardEmployeeContactAction,
   sendTimeCardConfirmationRequestAction,
@@ -11,10 +12,15 @@ import { getPublicRouting } from "@/lib/request-routing";
 import { isTimeCardManagerAutomationLive } from "@/lib/square-time-card-manager";
 import {
   getTimeCardConfirmationAuditEvents,
+  getTimeCardConfirmationRuns,
   getOrCreateTimeCardConfirmationSettings,
   getTimeCardConfirmationRequests,
   getTimeCardEmployeeContacts
 } from "@/lib/time-card-email-workflow";
+import {
+  filterTimeCardConfirmationRequests,
+  isTimeCardRequestOverdue
+} from "@/lib/time-card-report";
 
 const weekdayOptions = [
   "Sunday",
@@ -29,8 +35,12 @@ const weekdayOptions = [
 type ManagerResponsesPageProps = {
   searchParams?: Promise<{
     count?: string;
+    employee?: string;
     error?: string;
+    periodEnd?: string;
+    periodStart?: string;
     saved?: string;
+    status?: string;
   }>;
 };
 
@@ -54,22 +64,37 @@ export default async function ManagerResponsesPage({
     : "/app/time-card-manager/responses";
   const timeCardPath = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
   const { customer } = await requireCurrentCustomer(redirectTo, routing.dashboardPath);
-  const [employees, requests, auditEvents, confirmationSettings, query] = await Promise.all([
+  const [employees, requests, auditEvents, confirmationRuns, confirmationSettings, query] = await Promise.all([
     getTimeCardEmployeeContacts(customer.id),
-    getTimeCardConfirmationRequests(customer.id),
+    getTimeCardConfirmationRequests(customer.id, 250),
     getTimeCardConfirmationAuditEvents(customer.id),
+    getTimeCardConfirmationRuns(customer.id),
     getOrCreateTimeCardConfirmationSettings(customer.id),
     searchParams
   ]);
   const automationLive = isTimeCardManagerAutomationLive();
   const defaultPeriod = getDefaultPeriod();
-  const awaitingReview = requests.filter((request) => request.status === "responded");
-  const openRequests = requests.filter((request) =>
+  const now = new Date();
+  const filters = {
+    employee: query?.employee,
+    periodEnd: query?.periodEnd,
+    periodStart: query?.periodStart,
+    status: query?.status
+  };
+  const filteredRequests = filterTimeCardConfirmationRequests(requests, filters, now);
+  const awaitingReview = filteredRequests.filter((request) => request.status === "responded");
+  const openRequests = filteredRequests.filter((request) =>
     request.status === "pending" || request.status === "delivery_failed"
   );
-  const completedRequests = requests.filter((request) =>
+  const completedRequests = filteredRequests.filter((request) =>
     request.status === "approved" || request.status === "rejected"
   );
+  const overdueCount = requests.filter((request) => isTimeCardRequestOverdue(request, now)).length;
+  const exportParams = new URLSearchParams();
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value) exportParams.set(key, value);
+  });
 
   return (
     <>
@@ -92,6 +117,9 @@ export default async function ManagerResponsesPage({
         ) : null}
         {query?.saved === "confirmation_sent" ? (
           <p className="form-success">Confirmation request sent by email.</p>
+        ) : null}
+        {query?.saved === "confirmation_resent" ? (
+          <p className="form-success">A new secure response link was emailed to the employee.</p>
         ) : null}
         {query?.saved === "confirmation_settings" ? (
           <p className="form-success">Weekly confirmation schedule saved.</p>
@@ -123,12 +151,82 @@ export default async function ManagerResponsesPage({
         {query?.error === "confirmation_send_failed" ? (
           <p className="form-error">The request could not be sent. Check the email provider configuration.</p>
         ) : null}
+        {query?.error === "confirmation_resend_failed" ? (
+          <p className="form-error">The reminder could not be sent, or the request is no longer open.</p>
+        ) : null}
         {query?.error === "confirmation_settings_invalid" ? (
           <p className="form-error">Choose a valid weekly schedule, timezone, and period length.</p>
         ) : null}
         {query?.error === "review_invalid" ? (
           <p className="form-error">That response is no longer awaiting review or contains invalid shift details.</p>
         ) : null}
+
+        <section className="dashboard-card">
+          <div className="subcard-header">
+            <div>
+              <h2>Confirmation report</h2>
+              <p>Filter the manager record or download the same results as a spreadsheet-ready CSV.</p>
+            </div>
+            <a
+              className="pill"
+              href={`/api/time-card-manager/export${exportParams.size ? `?${exportParams.toString()}` : ""}`}
+            >
+              Download CSV
+            </a>
+          </div>
+          <div className="form-grid-three">
+            <div className="metric">
+              <strong>{requests.length}</strong>
+              Total requests
+            </div>
+            <div className="metric">
+              <strong>{requests.filter((request) => request.status === "responded").length}</strong>
+              Awaiting review
+            </div>
+            <div className="metric">
+              <strong>{overdueCount}</strong>
+              Overdue
+            </div>
+          </div>
+          <form className="auth-form" method="get">
+            <div className="form-grid-three">
+              <label className="field">
+                <span>Employee</span>
+                <input defaultValue={query?.employee ?? ""} name="employee" placeholder="Search by name" />
+              </label>
+              <label className="field">
+                <span>Status</span>
+                <select defaultValue={query?.status ?? ""} name="status">
+                  <option value="">All statuses</option>
+                  <option value="responded">Awaiting review</option>
+                  <option value="pending">Waiting for employee</option>
+                  <option value="overdue">Overdue</option>
+                  <option value="delivery_failed">Delivery failed</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </label>
+              <div className="field">
+                <span>Results</span>
+                <strong>{filteredRequests.length} matching</strong>
+              </div>
+            </div>
+            <div className="form-grid-two">
+              <label className="field">
+                <span>Period on or after</span>
+                <input defaultValue={query?.periodStart ?? ""} name="periodStart" type="date" />
+              </label>
+              <label className="field">
+                <span>Period on or before</span>
+                <input defaultValue={query?.periodEnd ?? ""} name="periodEnd" type="date" />
+              </label>
+            </div>
+            <div className="subscription-actions">
+              <button className="pill primary pill-button" type="submit">Apply filters</button>
+              <a className="pill" href={redirectTo}>Clear</a>
+            </div>
+          </form>
+        </section>
 
         <div className="manager-workflow-grid">
           <section className="dashboard-card manager-workflow-main">
@@ -212,14 +310,24 @@ export default async function ManagerResponsesPage({
                   <article className="delivery-log-row" key={request.id}>
                     <div className="delivery-log-topline">
                       <strong>{request.employeeName}</strong>
-                      <span className={`delivery-log-status ${request.status === "delivery_failed" ? "failed" : "sent"}`}>
-                        {request.status.replaceAll("_", " ")}
+                      <span className={`delivery-log-status ${request.status === "delivery_failed" || isTimeCardRequestOverdue(request, now) ? "failed" : "sent"}`}>
+                        {isTimeCardRequestOverdue(request, now)
+                          ? "overdue"
+                          : request.status.replaceAll("_", " ")}
                       </span>
                     </div>
                     <p>{request.periodStart} through {request.periodEnd} · {request.employeeEmail}</p>
                     <p className="delivery-log-time">
                       {request.sentAt ? `Sent ${request.sentAt.toLocaleString()}` : "Not delivered"}
+                      {request.reminderCount ? ` · ${request.reminderCount} reminder${request.reminderCount === 1 ? "" : "s"}` : ""}
                     </p>
+                    <form action={resendTimeCardConfirmationRequestAction}>
+                      <input name="redirectTo" type="hidden" value={redirectTo} />
+                      <input name="requestId" type="hidden" value={request.id} />
+                      <button className="pill pill-button" type="submit">
+                        {request.status === "delivery_failed" ? "Retry email" : "Send reminder"}
+                      </button>
+                    </form>
                   </article>
                 ))}
               </div>
@@ -323,6 +431,33 @@ export default async function ManagerResponsesPage({
               ) : null}
               <button className="pill pill-button" type="submit">Save weekly schedule</button>
             </form>
+
+            <div className="section-heading">
+              <div>
+                <h2>Automation runs</h2>
+                <p>Each employee period is claimed once, preventing duplicate weekly sends.</p>
+              </div>
+            </div>
+            {confirmationRuns.length ? (
+              <div className="delivery-log">
+                {confirmationRuns.map((run) => (
+                  <article className="delivery-log-row" key={run.id}>
+                    <div className="delivery-log-topline">
+                      <strong>{run.periodStart} through {run.periodEnd}</strong>
+                      <span className={`delivery-log-status ${run.failedCount ? "failed" : "sent"}`}>
+                        {run.status.replaceAll("_", " ")}
+                      </span>
+                    </div>
+                    <p>{run.sentCount} sent · {run.skippedCount} skipped · {run.failedCount} failed</p>
+                    <p className="delivery-log-time">
+                      Started {run.createdAt.toLocaleString()}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="auth-helper">No automated confirmation run has occurred yet.</p>
+            )}
 
             <div className="section-heading">
               <div>

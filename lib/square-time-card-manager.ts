@@ -172,10 +172,10 @@ export function isTimeCardManagerAutomationLive() {
 }
 
 export function getTimeCardManagerAutomationWindowMinutes() {
-  const parsed = Number(process.env.TIME_CARD_AUTOMATION_WINDOW_MINUTES ?? 15);
+  const parsed = Number(process.env.TIME_CARD_AUTOMATION_WINDOW_MINUTES ?? 60);
 
   if (Number.isNaN(parsed) || parsed < 5 || parsed > 60) {
-    return 15;
+    return 60;
   }
 
   return parsed;

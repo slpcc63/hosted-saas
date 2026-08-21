@@ -163,7 +163,7 @@ route plus a scheduled GitHub Actions workflow.
    ```text
    CRON_SECRET=replace-with-a-long-random-secret
    TIME_CARD_AUTOMATION_LIVE=true
-   TIME_CARD_AUTOMATION_WINDOW_MINUTES=15
+   TIME_CARD_AUTOMATION_WINDOW_MINUTES=60
    TIME_CARD_AUTOMATION_THRESHOLD_HOURS=12
    ```
 

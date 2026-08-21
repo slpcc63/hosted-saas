@@ -41,6 +41,7 @@ import {
 } from "@/lib/subscriptions";
 import {
   createAndSendTimeCardConfirmationRequest,
+  resendTimeCardConfirmationRequest,
   reviewTimeCardConfirmationRequest,
   submitTimeCardEmployeeResponse,
   syncTimeCardEmployeesFromSquare,
@@ -693,6 +694,35 @@ export async function sendTimeCardConfirmationRequestAction(formData: FormData) 
 
   revalidatePath("/app/time-card-manager/responses");
   redirect(`${redirectTo}?saved=confirmation_sent`);
+}
+
+export async function resendTimeCardConfirmationRequestAction(formData: FormData) {
+  const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
+  const session = await requireSession(redirectTo);
+  const customer = await getCustomerByUserId(session.user.id);
+
+  if (!customer) {
+    redirect("/app");
+  }
+
+  let failed = false;
+
+  try {
+    await resendTimeCardConfirmationRequest({
+      actorIdentifier: session.user.id,
+      customerId: customer.id,
+      requestId: String(formData.get("requestId") ?? "").trim()
+    });
+  } catch {
+    failed = true;
+  }
+
+  if (failed) {
+    redirect(`${redirectTo}?error=confirmation_resend_failed`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${redirectTo}?saved=confirmation_resent`);
 }
 
 export async function submitTimeCardEmployeeResponseAction(formData: FormData) {

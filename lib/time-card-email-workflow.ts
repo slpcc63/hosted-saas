@@ -46,6 +46,7 @@ export type TimeCardConfirmationRequest = {
   employeeName: string;
   id: string;
   managerNote: string | null;
+  lastReminderAt: Date | null;
   periodEnd: string;
   periodStart: string;
   reportedShiftDate: string | null;
@@ -54,6 +55,7 @@ export type TimeCardConfirmationRequest = {
   respondedAt: Date | null;
   responseCode: "a" | "b" | null;
   responseNote: string | null;
+  reminderCount: number;
   reviewedAt: Date | null;
   reviewedByUserId: string | null;
   sentAt: Date | null;
@@ -62,6 +64,19 @@ export type TimeCardConfirmationRequest = {
   timezone: string;
   tokenExpiresAt: Date;
   updatedAt: Date;
+};
+
+export type TimeCardConfirmationRun = {
+  completedAt: Date | null;
+  createdAt: Date;
+  customerId: string;
+  failedCount: number;
+  id: string;
+  periodEnd: string;
+  periodStart: string;
+  skippedCount: number;
+  sentCount: number;
+  status: string;
 };
 
 export type PublicTimeCardConfirmationRequest = Pick<
@@ -182,6 +197,8 @@ function mapRequest(row: Record<string, unknown>): TimeCardConfirmationRequest {
     reportedTimeOut: typeof row.reported_time_out === "string" ? row.reported_time_out : null,
     responseNote: typeof row.response_note === "string" ? row.response_note : null,
     managerNote: typeof row.manager_note === "string" ? row.manager_note : null,
+    reminderCount: Number(row.reminder_count ?? 0),
+    lastReminderAt: row.last_reminder_at ? new Date(String(row.last_reminder_at)) : null,
     sentAt: row.sent_at ? new Date(String(row.sent_at)) : null,
     respondedAt: row.responded_at ? new Date(String(row.responded_at)) : null,
     reviewedAt: row.reviewed_at ? new Date(String(row.reviewed_at)) : null,
@@ -244,6 +261,8 @@ export async function ensureTimeCardEmailWorkflowTables() {
         reported_time_out text,
         response_note text,
         manager_note text,
+        reminder_count integer not null default 0,
+        last_reminder_at timestamptz,
         sent_at timestamptz,
         responded_at timestamptz,
         reviewed_at timestamptz,
@@ -266,6 +285,25 @@ export async function ensureTimeCardEmailWorkflowTables() {
         created_at timestamptz not null default now()
       );
 
+      create table if not exists public.time_card_confirmation_runs (
+        id uuid primary key default gen_random_uuid(),
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        period_start date not null,
+        period_end date not null,
+        status text not null default 'running',
+        sent_count integer not null default 0,
+        skipped_count integer not null default 0,
+        failed_count integer not null default 0,
+        completed_at timestamptz,
+        created_at timestamptz not null default now(),
+        unique (customer_id, period_start, period_end)
+      );
+
+      alter table public.time_card_confirmation_requests
+        add column if not exists reminder_count integer not null default 0;
+      alter table public.time_card_confirmation_requests
+        add column if not exists last_reminder_at timestamptz;
+
       create index if not exists time_card_contacts_customer_idx
         on public.time_card_employee_contacts(customer_id, active, display_name);
       create index if not exists time_card_requests_customer_status_idx
@@ -276,6 +314,8 @@ export async function ensureTimeCardEmailWorkflowTables() {
         on public.time_card_confirmation_requests(employee_id, period_start, period_end);
       create index if not exists time_card_audit_request_idx
         on public.time_card_confirmation_audit_events(request_id, created_at);
+      create index if not exists time_card_confirmation_runs_customer_idx
+        on public.time_card_confirmation_runs(customer_id, created_at desc);
     `).then(() => undefined);
   }
 
@@ -462,7 +502,8 @@ export async function getTimeCardConfirmationRequests(customerId: string, limit 
             employee_email, period_start, period_end, timezone, status, response_code,
             reported_shift_date, reported_time_in, reported_time_out, response_note,
             manager_note, sent_at, responded_at, reviewed_at, approved_at,
-            reviewed_by_user_id, token_expires_at, created_at, updated_at
+            reviewed_by_user_id, reminder_count, last_reminder_at,
+            token_expires_at, created_at, updated_at
      from public.time_card_confirmation_requests
      where customer_id = $1
      order by
@@ -503,6 +544,32 @@ export async function getTimeCardConfirmationAuditEvents(customerId: string, lim
     employeeName: String(row.employee_name),
     createdAt: new Date(String(row.created_at))
   } satisfies TimeCardConfirmationAuditEvent));
+}
+
+export async function getTimeCardConfirmationRuns(customerId: string, limit = 12) {
+  await ensureTimeCardEmailWorkflowTables();
+  const result = await db.query(
+    `select id, customer_id, period_start, period_end, status, sent_count,
+            skipped_count, failed_count, completed_at, created_at
+     from public.time_card_confirmation_runs
+     where customer_id = $1
+     order by created_at desc
+     limit $2`,
+    [customerId, Math.min(Math.max(limit, 1), 50)]
+  );
+
+  return result.rows.map((row) => ({
+    id: String(row.id),
+    customerId: String(row.customer_id),
+    periodStart: String(row.period_start).slice(0, 10),
+    periodEnd: String(row.period_end).slice(0, 10),
+    status: String(row.status),
+    sentCount: Number(row.sent_count),
+    skippedCount: Number(row.skipped_count),
+    failedCount: Number(row.failed_count),
+    completedAt: row.completed_at ? new Date(String(row.completed_at)) : null,
+    createdAt: new Date(String(row.created_at))
+  } satisfies TimeCardConfirmationRun));
 }
 
 export async function createAndSendTimeCardConfirmationRequest(input: {
@@ -673,6 +740,122 @@ export async function createAndSendTimeCardConfirmationRequest(input: {
   }
 
   return requestId;
+}
+
+export async function resendTimeCardConfirmationRequest(input: {
+  actorIdentifier: string;
+  customerId: string;
+  requestId: string;
+}) {
+  await ensureTimeCardEmailWorkflowTables();
+  const result = await db.query(
+    `select requests.id, requests.customer_id, requests.employee_name,
+            requests.employee_email, requests.period_start, requests.period_end,
+            requests.status, requests.reminder_count, requests.updated_at,
+            customers.company_name, customers.contact_name
+     from public.time_card_confirmation_requests requests
+     inner join public.customer_profiles customers on customers.id = requests.customer_id
+     where requests.id = $1 and requests.customer_id = $2
+       and requests.status in ('pending', 'delivery_failed')
+     limit 1`,
+    [input.requestId, input.customerId]
+  );
+  const request = result.rows[0];
+
+  if (!request) {
+    throw new Error("Only an open request can be resent");
+  }
+
+  const employeeEmail = String(request.employee_email).trim().toLowerCase();
+
+  if (!isValidEmail(employeeEmail)) {
+    throw new Error("The employee needs a valid email before a request can be resent");
+  }
+
+  const token = randomBytes(32).toString("base64url");
+  const tokenHash = hashResponseToken(token);
+  const expirationDays = 14;
+  const companyName =
+    (typeof request.company_name === "string" && request.company_name.trim()) ||
+    (typeof request.contact_name === "string" && request.contact_name.trim()) ||
+    "Your employer";
+  const periodStart = String(request.period_start).slice(0, 10);
+  const periodEnd = String(request.period_end).slice(0, 10);
+  const employeeName = String(request.employee_name);
+  const responseUrl = `${getAppOrigin()}/app/time-card-response/${encodeURIComponent(token)}`;
+
+  const claimResult = await db.query(
+     `update public.time_card_confirmation_requests
+     set status = 'pending', response_token_hash = $3,
+         token_expires_at = now() + ($4 * interval '1 day'),
+         reminder_count = reminder_count + 1, last_reminder_at = now(), updated_at = now()
+     where id = $1 and customer_id = $2 and updated_at = $5
+     returning id, reminder_count`,
+    [input.requestId, input.customerId, tokenHash, expirationDays, request.updated_at]
+  );
+
+  if (!claimResult.rows[0]) {
+    throw new Error("This request was already updated; refresh before sending another reminder");
+  }
+  const reminderCount = Number(claimResult.rows[0].reminder_count);
+
+  try {
+    await sendTransactionalEmail({
+      to: employeeEmail,
+      subject: `${companyName}: reminder to confirm your time for ${periodStart} through ${periodEnd}`,
+      idempotencyKey: `time-card-confirmation-${input.requestId}-reminder-${reminderCount}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2933;">
+          <h1>Reminder: confirm your time</h1>
+          <p>Hello ${escapeHtml(employeeName)},</p>
+          <p>Please confirm whether you worked between <strong>${escapeHtml(periodStart)}</strong>
+            and <strong>${escapeHtml(periodEnd)}</strong>.</p>
+          <p><a href="${escapeHtml(responseUrl)}" style="display:inline-block;padding:12px 18px;border-radius:999px;background:#235f49;color:#fff;text-decoration:none;font-weight:700;">Respond securely</a></p>
+          <p>This new private link replaces the earlier link, expires in ${expirationDays} days, and can be submitted once.</p>
+        </div>
+      `,
+      text: [
+        `Hello ${employeeName},`,
+        "",
+        `Please confirm whether you worked between ${periodStart} and ${periodEnd}.`,
+        `Respond securely: ${responseUrl}`,
+        `This new private link replaces the earlier link, expires in ${expirationDays} days, and can be submitted once.`
+      ].join("\n")
+    });
+
+    await db.query(
+      `update public.time_card_confirmation_requests
+       set status = 'pending', sent_at = now(), updated_at = now()
+       where id = $1 and customer_id = $2`,
+      [input.requestId, input.customerId]
+    );
+    await db.query(
+      `insert into public.time_card_confirmation_audit_events (
+        request_id, customer_id, event_type, actor_type, actor_identifier, details
+      ) values ($1, $2, 'email_resent', 'manager', $3, $4::jsonb)`,
+      [
+        input.requestId,
+        input.customerId,
+        input.actorIdentifier,
+        JSON.stringify({ employeeEmail, reminderCount })
+      ]
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Email delivery failed";
+    await db.query(
+      `update public.time_card_confirmation_requests
+       set status = 'delivery_failed', updated_at = now()
+       where id = $1 and customer_id = $2`,
+      [input.requestId, input.customerId]
+    );
+    await db.query(
+      `insert into public.time_card_confirmation_audit_events (
+        request_id, customer_id, event_type, actor_type, details
+      ) values ($1, $2, 'email_resend_failed', 'system', $3::jsonb)`,
+      [input.requestId, input.customerId, JSON.stringify({ message })]
+    );
+    throw error;
+  }
 }
 
 function escapeHtml(value: string) {
@@ -969,10 +1152,10 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
     };
   }
 
-  const parsedWindow = Number(process.env.TIME_CARD_AUTOMATION_WINDOW_MINUTES ?? 15);
+  const parsedWindow = Number(process.env.TIME_CARD_AUTOMATION_WINDOW_MINUTES ?? 60);
   const windowMinutes = Number.isFinite(parsedWindow) && parsedWindow >= 5 && parsedWindow <= 60
     ? parsedWindow
-    : 15;
+    : 60;
   const settingsResult = await db.query(
     `select settings.customer_id, settings.automation_enabled, settings.send_day_of_week,
             settings.send_time_local, settings.timezone, settings.period_days
@@ -998,12 +1181,44 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
   }> = [];
 
   for (const settings of dueSettings) {
+    const { periodStart, periodEnd } = buildCompletedConfirmationPeriod({
+      now,
+      timezone: settings.timezone,
+      periodDays: settings.periodDays
+    });
+    const runResult = await db.query(
+      `insert into public.time_card_confirmation_runs (
+        customer_id, period_start, period_end, status
+      ) values ($1, $2, $3, 'running')
+      on conflict (customer_id, period_start, period_end) do nothing
+      returning id`,
+      [settings.customerId, periodStart, periodEnd]
+    );
+    const runId = runResult.rows[0]?.id ? String(runResult.rows[0].id) : null;
+
+    if (!runId) {
+      results.push({
+        customerId: settings.customerId,
+        failedCount: 0,
+        skippedCount: 0,
+        sentCount: 0,
+        status: "skipped_already_processed"
+      });
+      continue;
+    }
+
     const subscription = await getActiveSubscriptionForProduct({
       customerId: settings.customerId,
       productSlug: "square-time-card-manager"
     });
 
     if (!subscription) {
+      await db.query(
+        `update public.time_card_confirmation_runs
+         set status = 'skipped_no_subscription', completed_at = now()
+         where id = $1`,
+        [runId]
+      );
       results.push({
         customerId: settings.customerId,
         failedCount: 0,
@@ -1021,11 +1236,6 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
        order by display_name`,
       [settings.customerId]
     );
-    const { periodStart, periodEnd } = buildCompletedConfirmationPeriod({
-      now,
-      timezone: settings.timezone,
-      periodDays: settings.periodDays
-    });
     let sentCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
@@ -1056,12 +1266,20 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
       }
     }
 
+    const status = failedCount ? "completed_with_errors" : "completed";
+    await db.query(
+      `update public.time_card_confirmation_runs
+       set status = $2, sent_count = $3, skipped_count = $4,
+           failed_count = $5, completed_at = now()
+       where id = $1`,
+      [runId, status, sentCount, skippedCount, failedCount]
+    );
     results.push({
       customerId: settings.customerId,
       sentCount,
       skippedCount,
       failedCount,
-      status: failedCount ? "completed_with_errors" : "completed"
+      status
     });
   }
 
