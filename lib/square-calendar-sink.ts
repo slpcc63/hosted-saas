@@ -164,12 +164,31 @@ export async function ensureSquareCalendarSinkSettingsTable() {
       create index if not exists square_calendar_sink_deliveries_feed_idx
         on public.square_calendar_sink_deliveries(feed_id, created_at desc);
 
-      insert into public.square_calendar_sink_feeds
-        (customer_id, team_member_id, calendar_name, feed_token, enabled, created_at, updated_at)
-      select customer_id, team_member_id, calendar_name, feed_token, enabled, created_at, updated_at
-      from public.square_calendar_sink_settings
-      where team_member_id is not null
-      on conflict (customer_id, team_member_id) do nothing;
+      create table if not exists public.square_calendar_sink_migrations (
+        migration_key text primary key,
+        completed_at timestamptz not null default now()
+      );
+
+      do $$
+      begin
+        if not exists (
+          select 1
+          from public.square_calendar_sink_migrations
+          where migration_key = 'legacy_settings_to_employee_feeds_v1'
+        ) then
+          insert into public.square_calendar_sink_feeds
+            (customer_id, team_member_id, calendar_name, feed_token, enabled, created_at, updated_at)
+          select customer_id, team_member_id, calendar_name, feed_token, enabled, created_at, updated_at
+          from public.square_calendar_sink_settings
+          where team_member_id is not null
+          on conflict (customer_id, team_member_id) do nothing;
+
+          insert into public.square_calendar_sink_migrations (migration_key)
+          values ('legacy_settings_to_employee_feeds_v1')
+          on conflict (migration_key) do nothing;
+        end if;
+      end
+      $$;
     `).then(() => undefined);
   }
 
@@ -459,12 +478,24 @@ export async function createMissingSquareCalendarSinkEmployeeFeeds(customerId: s
 export async function rotateSquareCalendarSinkFeedToken(customerId: string, feedId: string) {
   await ensureSquareCalendarSinkSettingsTable();
   const result = await db.query(
-    `update public.square_calendar_sink_feeds
-     set feed_token = $2,
-         updated_at = now()
-     where customer_id = $1 and id = $3
-     returning id, customer_id, team_member_id, calendar_name, feed_token, enabled,
-               created_at, updated_at`,
+    `with updated as (
+       update public.square_calendar_sink_feeds
+       set feed_token = $2,
+           updated_at = now()
+       where customer_id = $1 and id = $3
+       returning id, customer_id, team_member_id, calendar_name, feed_token, enabled,
+                 created_at, updated_at
+     ), legacy as (
+       update public.square_calendar_sink_settings legacy_settings
+       set feed_token = updated.feed_token,
+           updated_at = now()
+       from updated
+       where legacy_settings.customer_id = updated.customer_id
+         and legacy_settings.team_member_id = updated.team_member_id
+     )
+     select id, customer_id, team_member_id, calendar_name, feed_token, enabled,
+            created_at, updated_at
+     from updated`,
     [customerId, newFeedToken(), feedId]
   );
 
@@ -482,12 +513,24 @@ export async function setSquareCalendarSinkEnabled(
 ) {
   await ensureSquareCalendarSinkSettingsTable();
   const result = await db.query(
-    `update public.square_calendar_sink_feeds
-     set enabled = $2,
-         updated_at = now()
-     where customer_id = $1 and id = $3
-     returning id, customer_id, team_member_id, calendar_name, feed_token, enabled,
-               created_at, updated_at`,
+    `with updated as (
+       update public.square_calendar_sink_feeds
+       set enabled = $2,
+           updated_at = now()
+       where customer_id = $1 and id = $3
+       returning id, customer_id, team_member_id, calendar_name, feed_token, enabled,
+                 created_at, updated_at
+     ), legacy as (
+       update public.square_calendar_sink_settings legacy_settings
+       set enabled = updated.enabled,
+           updated_at = now()
+       from updated
+       where legacy_settings.customer_id = updated.customer_id
+         and legacy_settings.team_member_id = updated.team_member_id
+     )
+     select id, customer_id, team_member_id, calendar_name, feed_token, enabled,
+            created_at, updated_at
+     from updated`,
     [customerId, enabled, feedId]
   );
 
@@ -501,9 +544,17 @@ export async function setSquareCalendarSinkEnabled(
 export async function deleteSquareCalendarSinkEmployeeFeed(customerId: string, feedId: string) {
   await ensureSquareCalendarSinkSettingsTable();
   const result = await db.query(
-    `delete from public.square_calendar_sink_feeds
-     where customer_id = $1 and id = $2
-     returning id`,
+    `with deleted as (
+       delete from public.square_calendar_sink_feeds
+       where customer_id = $1 and id = $2
+       returning id, customer_id, team_member_id
+     ), legacy as (
+       delete from public.square_calendar_sink_settings legacy_settings
+       using deleted
+       where legacy_settings.customer_id = deleted.customer_id
+         and legacy_settings.team_member_id = deleted.team_member_id
+     )
+     select id from deleted`,
     [customerId, feedId]
   );
 
