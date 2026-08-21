@@ -1,7 +1,9 @@
+import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { getOrCreateCustomerProfile } from "@/lib/customers";
+import { getPublicRouting } from "@/lib/request-routing";
 import { upsertSquareConnection } from "@/lib/square-connections";
 import { installSquareCalendarSink } from "@/lib/square-calendar-sink";
 import { SquarePluginId, squarePluginIds } from "@/lib/square-plugin-installations";
@@ -46,15 +48,16 @@ async function installSquarePlugin(pluginId: SquarePluginId, customerId: string)
   return installSquareTimeCardManager(customerId);
 }
 
-function getPluginRedirectPath(pluginId: SquarePluginId) {
+function getPluginRedirectPath(pluginId: SquarePluginId, appHost: boolean) {
   if (pluginId === "square-time-card-manager") {
-    return "/app/time-card-manager";
+    return appHost ? "/time-card-manager" : "/app/time-card-manager";
   }
 
-  return "/dashboard";
+  return appHost ? "/calendar-sink" : "/app/calendar-sink";
 }
 
 export async function GET(request: NextRequest) {
+  const routing = await getPublicRouting();
   const requestUrl = new URL(request.url);
   const code = requestUrl.searchParams.get("code");
   const state = requestUrl.searchParams.get("state");
@@ -64,7 +67,7 @@ export async function GET(request: NextRequest) {
   if (returnedError) {
     return NextResponse.redirect(
       new URL(
-        `${getPluginRedirectPath(storedState?.pluginId ?? "square-time-card-manager")}?error=${encodeURIComponent("square_authorization_failed")}`,
+        `${getPluginRedirectPath(storedState?.pluginId ?? "square-time-card-manager", routing.appHost)}?error=${encodeURIComponent("square_authorization_failed")}`,
         request.url
       )
     );
@@ -73,18 +76,18 @@ export async function GET(request: NextRequest) {
   if (!code || !state || !storedState || state !== storedState.state) {
     return NextResponse.redirect(
       new URL(
-        `${getPluginRedirectPath(storedState?.pluginId ?? "square-time-card-manager")}?error=square_state_invalid`,
+        `${getPluginRedirectPath(storedState?.pluginId ?? "square-time-card-manager", routing.appHost)}?error=square_state_invalid`,
         request.url
       )
     );
   }
 
   const session = await auth.api.getSession({
-    headers: request.headers
+    headers: await headers()
   });
 
   if (!session?.user) {
-    return NextResponse.redirect(new URL("/sign-in?next=/dashboard", request.url));
+    return NextResponse.redirect(new URL(routing.signInPath, request.url));
   }
   const customer = await getOrCreateCustomerProfile({
     userId: session.user.id,
@@ -94,9 +97,12 @@ export async function GET(request: NextRequest) {
     status: "active"
   });
 
+  let callbackStage = "token_exchange";
+
   try {
     const tokenResponse = await exchangeSquareAuthorizationCode(code);
 
+    callbackStage = "connection_storage";
     await upsertSquareConnection({
       customerId: customer.id,
       merchantId: tokenResponse.merchant_id,
@@ -106,21 +112,28 @@ export async function GET(request: NextRequest) {
       authorizedScopes: tokenResponse.scopes ?? []
     });
 
+    callbackStage = "plugin_installation";
     await installSquarePlugin(storedState.pluginId, customer.id);
 
     const response = NextResponse.redirect(
       new URL(
-        `${getPluginRedirectPath(storedState.pluginId)}?saved=${encodeURIComponent("square_connection")}`,
+        `${getPluginRedirectPath(storedState.pluginId, routing.appHost)}?saved=${encodeURIComponent("square_connection")}`,
         request.url
       )
     );
 
     response.cookies.delete(stateCookieName);
     return response;
-  } catch {
+  } catch (error) {
+    console.error("[square-oauth] callback failed", {
+      error: error instanceof Error ? error.message : String(error),
+      pluginId: storedState.pluginId,
+      stage: callbackStage
+    });
+
     const response = NextResponse.redirect(
       new URL(
-        `${getPluginRedirectPath(storedState.pluginId)}?error=square_token_exchange_failed`,
+        `${getPluginRedirectPath(storedState.pluginId, routing.appHost)}?error=square_token_exchange_failed`,
         request.url
       )
     );

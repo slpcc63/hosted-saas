@@ -23,6 +23,7 @@ export async function SiteHeader({ appMode = false }: SiteHeaderProps) {
             <>
               <a href={routing.marketingHref}>Marketing Site</a>
               <a href={routing.dashboardPath}>Dashboard</a>
+              <a href={routing.appHost ? "/calendar-sink" : "/app/calendar-sink"}>Calendar Sync</a>
               <a href={routing.appHost ? "/time-card-manager" : "/app/time-card-manager"}>Time Card Manager</a>
               <a href={routing.appHost ? "/subscriptions" : "/app/subscriptions"}>Subscriptions</a>
               <a href={routing.appHost ? "/account" : "/app/account"}>Account</a>

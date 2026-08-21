@@ -2,7 +2,11 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { ensureCustomerProfilesTable } from "@/lib/customers";
-import { getSquareEnvironmentLabel } from "@/lib/square";
+import {
+  getSquareEnvironmentLabel,
+  refreshSquareAuthorization,
+  retrieveSquareTokenStatus
+} from "@/lib/square";
 
 export type SquareConnection = {
   accessToken: string;
@@ -107,6 +111,43 @@ export async function getSquareConnectionByCustomerId(customerId: string) {
   return mapSquareConnection(result.rows[0]);
 }
 
+export async function getValidSquareConnectionByCustomerId(customerId: string) {
+  let connection = await getSquareConnectionByCustomerId(customerId);
+
+  if (!connection) {
+    return null;
+  }
+
+  if (connection.authorizedScopes.length === 0) {
+    const tokenStatus = await retrieveSquareTokenStatus(connection.accessToken);
+    connection = await upsertSquareConnection({
+      customerId,
+      merchantId: tokenStatus.merchant_id || connection.merchantId,
+      accessToken: connection.accessToken,
+      refreshToken: connection.refreshToken,
+      expiresAt: tokenStatus.expires_at ?? connection.expiresAt?.toISOString(),
+      authorizedScopes: tokenStatus.scopes ?? []
+    });
+  }
+
+  const refreshThreshold = Date.now() + 5 * 60 * 1000;
+
+  if (!connection.expiresAt || connection.expiresAt.getTime() > refreshThreshold) {
+    return connection;
+  }
+
+  const refreshed = await refreshSquareAuthorization(connection.refreshToken);
+
+  return upsertSquareConnection({
+    customerId,
+    merchantId: refreshed.merchant_id || connection.merchantId,
+    accessToken: refreshed.access_token,
+    refreshToken: refreshed.refresh_token,
+    expiresAt: refreshed.expires_at,
+    authorizedScopes: refreshed.scopes ?? connection.authorizedScopes
+  });
+}
+
 export async function upsertSquareConnection(input: {
   accessToken: string;
   authorizedScopes: string[];
@@ -127,7 +168,7 @@ export async function upsertSquareConnection(input: {
       square_environment,
       authorized_scopes
     ) values ($1, $2, $3, $4, $5, $6, $7)
-    on conflict (customer_id)
+    on conflict (customer_id) where customer_id is not null
     do update set
       merchant_id = excluded.merchant_id,
       access_token = excluded.access_token,

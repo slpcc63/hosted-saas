@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 
+import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { getOrCreateCustomerProfile } from "@/lib/customers";
+import { getPublicRouting } from "@/lib/request-routing";
 import { SquarePluginId, squarePluginIds } from "@/lib/square-plugin-installations";
 import { getSquareAuthorizationUrl, isSquareConfigured } from "@/lib/square";
 
@@ -18,16 +20,20 @@ function isSquarePluginId(value: string | null): value is SquarePluginId {
 }
 
 export async function GET(request: NextRequest) {
+  const routing = await getPublicRouting();
+
   if (!isSquareConfigured()) {
-    return NextResponse.redirect(new URL("/dashboard?error=square_not_configured", request.url));
+    return NextResponse.redirect(
+      new URL(`${routing.dashboardPath}?error=square_not_configured`, request.url)
+    );
   }
 
   const session = await auth.api.getSession({
-    headers: request.headers
+    headers: await headers()
   });
 
   if (!session?.user) {
-    return NextResponse.redirect(new URL("/sign-in?next=/dashboard", request.url));
+    return NextResponse.redirect(new URL(routing.signInPath, request.url));
   }
   await getOrCreateCustomerProfile({
     userId: session.user.id,
@@ -40,7 +46,9 @@ export async function GET(request: NextRequest) {
   const requestedPlugin = request.nextUrl.searchParams.get("plugin");
 
   if (!isSquarePluginId(requestedPlugin)) {
-    return NextResponse.redirect(new URL("/dashboard?error=square_plugin_invalid", request.url));
+    return NextResponse.redirect(
+      new URL(`${routing.dashboardPath}?error=square_plugin_invalid`, request.url)
+    );
   }
 
   const state = randomUUID();
