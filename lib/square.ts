@@ -1,5 +1,7 @@
 import "server-only";
 
+import { collectSquarePages } from "@/lib/square-pagination";
+
 export type SquareEnvironment = "production" | "sandbox";
 
 const squareVersion = "2026-01-22";
@@ -233,10 +235,7 @@ export async function searchSquareScheduledShifts(input: {
   startAt: Date;
   teamMemberIds?: string[];
 }) {
-  const scheduledShifts: SquareScheduledShift[] = [];
-  let cursor: string | undefined;
-
-  do {
+  const scheduledShifts = await collectSquarePages<SquareScheduledShift>(async (cursor) => {
     const response = await squareApiRequest<SquareSearchScheduledShiftsResponse>({
       accessToken: input.accessToken,
       path: "/v2/labor/scheduled-shifts/search",
@@ -264,12 +263,8 @@ export async function searchSquareScheduledShifts(input: {
       }
     });
 
-    if (response.scheduled_shifts?.length) {
-      scheduledShifts.push(...response.scheduled_shifts);
-    }
-
-    cursor = response.cursor;
-  } while (cursor);
+    return { cursor: response.cursor, items: response.scheduled_shifts };
+  });
 
   return scheduledShifts.filter(
     (shift) => shift.published_shift_details && !shift.published_shift_details.is_deleted

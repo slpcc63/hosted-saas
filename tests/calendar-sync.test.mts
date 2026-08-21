@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { buildSquareShiftCalendar } from "../lib/icalendar.ts";
+import { collectSquarePages } from "../lib/square-pagination.ts";
 
 const primaryShift = {
   id: "SHIFT_A",
@@ -88,4 +89,20 @@ test("deleted published details are excluded", () => {
   const calendar = buildSquareShiftCalendar({ ...input, shifts: [deleted] });
 
   assert.doesNotMatch(calendar.body, /BEGIN:VEVENT/);
+});
+
+test("Square pagination follows cursors and combines every page", async () => {
+  const requestedCursors: Array<string | undefined> = [];
+  const items = await collectSquarePages(async (cursor) => {
+    requestedCursors.push(cursor);
+
+    if (!cursor) {
+      return { cursor: "page-2", items: ["SHIFT_A", "SHIFT_B"] };
+    }
+
+    return { items: ["SHIFT_C"] };
+  });
+
+  assert.deepEqual(requestedCursors, [undefined, "page-2"]);
+  assert.deepEqual(items, ["SHIFT_A", "SHIFT_B", "SHIFT_C"]);
 });
