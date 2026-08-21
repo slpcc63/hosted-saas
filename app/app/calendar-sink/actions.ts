@@ -4,8 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { requireCurrentCustomer } from "@/lib/customers";
+import { getAppOrigin } from "@/lib/deployment";
 import { getPublicRouting } from "@/lib/request-routing";
 import {
+  distributeSquareCalendarSinkFeeds,
+  type CalendarSinkDistributionMode
+} from "@/lib/square-calendar-sink-delivery";
+import {
+  createMissingSquareCalendarSinkEmployeeFeeds,
   deleteSquareCalendarSinkEmployeeFeed,
   rotateSquareCalendarSinkFeedToken,
   setSquareCalendarSinkEnabled,
@@ -16,24 +22,72 @@ async function getCalendarSinkActionContext() {
   const routing = await getPublicRouting();
   const redirectTo = routing.appHost ? "/calendar-sink" : "/app/calendar-sink";
   const { customer } = await requireCurrentCustomer(redirectTo, "/app");
-  return { customer, redirectTo };
+  const setupBaseUrl = `${getAppOrigin()}${routing.appHost ? "" : "/app"}/calendar-sink/subscribe`;
+  return { customer, redirectTo, setupBaseUrl };
+}
+
+function getDistributionMode(formData: FormData): CalendarSinkDistributionMode {
+  return String(formData.get("distributionMode") ?? "manual") === "email"
+    ? "email"
+    : "manual";
+}
+
+function buildDistributionSearchParams(
+  saved: "bulk_created" | "feed_created",
+  result: Awaited<ReturnType<typeof distributeSquareCalendarSinkFeeds>>
+) {
+  return new URLSearchParams({
+    saved,
+    created: String(result.createdCount),
+    sent: String(result.sentCount),
+    manual: String(result.manualCount),
+    missing: String(result.missingContactCount),
+    failed: String(result.failedCount)
+  });
 }
 
 export async function createSquareCalendarSinkFeedAction(formData: FormData) {
-  const { customer, redirectTo } = await getCalendarSinkActionContext();
+  const { customer, redirectTo, setupBaseUrl } = await getCalendarSinkActionContext();
   const teamMemberId = String(formData.get("teamMemberId") ?? "").trim();
+  const distributionMode = getDistributionMode(formData);
 
   if (!teamMemberId) {
     redirect(`${redirectTo}?error=team_member_required`);
   }
 
-  await upsertSquareCalendarSinkEmployeeFeed({
+  const created = await upsertSquareCalendarSinkEmployeeFeed({
     customerId: customer.id,
     teamMemberId
   });
+  const distribution = await distributeSquareCalendarSinkFeeds({
+    created: [created],
+    customer,
+    mode: distributionMode,
+    setupBaseUrl
+  });
 
   revalidatePath("/app/calendar-sink");
-  redirect(`${redirectTo}?saved=feed_created`);
+  redirect(`${redirectTo}?${buildDistributionSearchParams("feed_created", distribution)}`);
+}
+
+export async function createMissingSquareCalendarSinkFeedsAction(formData: FormData) {
+  const { customer, redirectTo, setupBaseUrl } = await getCalendarSinkActionContext();
+  const distributionMode = getDistributionMode(formData);
+  const created = await createMissingSquareCalendarSinkEmployeeFeeds(customer.id);
+
+  if (!created.length) {
+    redirect(`${redirectTo}?saved=bulk_none`);
+  }
+
+  const distribution = await distributeSquareCalendarSinkFeeds({
+    created,
+    customer,
+    mode: distributionMode,
+    setupBaseUrl
+  });
+
+  revalidatePath("/app/calendar-sink");
+  redirect(`${redirectTo}?${buildDistributionSearchParams("bulk_created", distribution)}`);
 }
 
 export async function rotateSquareCalendarSinkFeedAction(formData: FormData) {

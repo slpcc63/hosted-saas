@@ -1003,6 +1003,117 @@ textarea {
   margin-top: 0;
 }
 
+.calendar-delivery-choice {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.calendar-delivery-choice legend {
+  margin-bottom: 0.5rem;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.calendar-delivery-choice label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.75rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-muted);
+  cursor: pointer;
+}
+
+.calendar-delivery-choice input {
+  width: auto;
+  margin-top: 0.18rem;
+}
+
+.calendar-delivery-choice span {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.calendar-delivery-choice small {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.calendar-bulk-count {
+  margin: 0 !important;
+  padding: 0.8rem 0.9rem;
+  border-radius: 14px;
+  background: var(--bg-subtle);
+}
+
+.calendar-recipient-review {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-muted);
+}
+
+.calendar-recipient-review summary {
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.calendar-recipient-review ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0 0.85rem 0.75rem;
+  list-style: none;
+}
+
+.calendar-recipient-review li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 0;
+  border-top: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+
+.calendar-recipient-review li strong {
+  color: var(--muted);
+  font-weight: 550;
+  text-align: right;
+}
+
+.calendar-recipient-review .calendar-contact-missing {
+  color: var(--danger);
+}
+
+.calendar-messaging-entitlement {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.calendar-messaging-entitlement > div {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--card-muted);
+}
+
+.calendar-messaging-entitlement span {
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
 .calendar-employee-section {
   margin-top: 2rem;
 }
@@ -1053,6 +1164,20 @@ textarea {
   margin: 0.3rem 0 0;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.calendar-employee-topline .calendar-delivery-label {
+  margin-top: 0.45rem;
+  font-weight: 650;
+}
+
+.calendar-delivery-sent {
+  color: var(--success) !important;
+}
+
+.calendar-delivery-failed,
+.calendar-delivery-needs_contact {
+  color: var(--danger) !important;
 }
 
 .calendar-feed-field-compact {
@@ -1148,7 +1273,8 @@ textarea {
 
 @media (max-width: 960px) {
   .calendar-manager-setup-grid,
-  .calendar-employee-grid {
+  .calendar-employee-grid,
+  .calendar-messaging-entitlement {
     grid-template-columns: 1fr;
   }
 }

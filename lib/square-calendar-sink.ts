@@ -15,8 +15,10 @@ import {
   listSquareJobs,
   listSquareLocations,
   searchSquareScheduledShifts,
-  searchSquareTeamMembers
+  searchSquareTeamMembers,
+  SquareTeamMember
 } from "@/lib/square";
+import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
 
 const pluginId: SquarePluginId = "square-calendar-sink";
 export const requiredSquareCalendarScopes = ["TIMECARDS_READ", "EMPLOYEES_READ"];
@@ -33,8 +35,24 @@ export type SquareCalendarSinkSettings = {
 };
 
 export type SquareCalendarSinkEmployeeFeed = SquareCalendarSinkSettings & {
+  emailAddress: string | null;
+  lastDelivery: SquareCalendarSinkDelivery | null;
+  phoneNumber: string | null;
   teamMemberName: string;
   upcomingShiftCount: number;
+};
+
+export type SquareCalendarSinkDeliveryChannel = "email" | "manual" | "text";
+export type SquareCalendarSinkDeliveryStatus = "failed" | "manual" | "needs_contact" | "sent";
+
+export type SquareCalendarSinkDelivery = {
+  attemptedAt: Date;
+  channel: SquareCalendarSinkDeliveryChannel;
+  errorMessage: string | null;
+  id: string;
+  providerMessageId: string | null;
+  recipient: string | null;
+  status: SquareCalendarSinkDeliveryStatus;
 };
 
 let settingsTableReady: Promise<void> | null = null;
@@ -54,6 +72,46 @@ function mapSettings(row: Record<string, unknown>): SquareCalendarSinkSettings {
     createdAt: new Date(String(row.created_at)),
     updatedAt: new Date(String(row.updated_at))
   };
+}
+
+function mapDelivery(row: Record<string, unknown>): SquareCalendarSinkDelivery {
+  return {
+    id: String(row.id),
+    channel: String(row.channel) as SquareCalendarSinkDeliveryChannel,
+    status: String(row.status) as SquareCalendarSinkDeliveryStatus,
+    recipient: row.recipient ? String(row.recipient) : null,
+    providerMessageId: row.provider_message_id ? String(row.provider_message_id) : null,
+    errorMessage: row.error_message ? String(row.error_message) : null,
+    attemptedAt: new Date(String(row.created_at))
+  };
+}
+
+function buildEmployeeFeeds(input: {
+  deliveries: Map<string, SquareCalendarSinkDelivery>;
+  settings: SquareCalendarSinkSettings[];
+  shiftCounts?: Map<string, number>;
+  teamMembers?: SquareTeamMember[];
+}) {
+  const members = new Map((input.teamMembers ?? []).map((member) => [member.id, member]));
+
+  return input.settings.map((feed): SquareCalendarSinkEmployeeFeed => {
+    const member = feed.teamMemberId ? members.get(feed.teamMemberId) : null;
+    const memberName = member
+      ? [member.given_name, member.family_name].filter(Boolean).join(" ") || member.id
+      : feed.calendarName;
+
+    return {
+      ...feed,
+      emailAddress: member?.email_address?.trim() || null,
+      lastDelivery: input.deliveries.get(feed.id) ?? null,
+      phoneNumber: member?.phone_number?.trim() || null,
+      teamMemberName: memberName,
+      upcomingShiftCount:
+        feed.teamMemberId && input.shiftCounts
+          ? input.shiftCounts.get(feed.teamMemberId) ?? 0
+          : 0
+    };
+  });
 }
 
 export async function ensureSquareCalendarSinkSettingsTable() {
@@ -91,6 +149,21 @@ export async function ensureSquareCalendarSinkSettingsTable() {
       create index if not exists square_calendar_sink_feeds_customer_idx
         on public.square_calendar_sink_feeds(customer_id);
 
+      create table if not exists public.square_calendar_sink_deliveries (
+        id uuid primary key default gen_random_uuid(),
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        feed_id uuid not null references public.square_calendar_sink_feeds(id) on delete cascade,
+        channel text not null check (channel in ('email', 'manual', 'text')),
+        recipient text,
+        status text not null check (status in ('failed', 'manual', 'needs_contact', 'sent')),
+        provider_message_id text,
+        error_message text,
+        created_at timestamptz not null default now()
+      );
+
+      create index if not exists square_calendar_sink_deliveries_feed_idx
+        on public.square_calendar_sink_deliveries(feed_id, created_at desc);
+
       insert into public.square_calendar_sink_feeds
         (customer_id, team_member_id, calendar_name, feed_token, enabled, created_at, updated_at)
       select customer_id, team_member_id, calendar_name, feed_token, enabled, created_at, updated_at
@@ -118,6 +191,51 @@ export async function listSquareCalendarSinkSettings(customerId: string) {
   return result.rows.map(mapSettings);
 }
 
+export async function listLatestSquareCalendarSinkDeliveries(customerId: string) {
+  await ensureSquareCalendarSinkSettingsTable();
+  const result = await db.query(
+    `select distinct on (feed_id)
+        id, feed_id, channel, recipient, status, provider_message_id, error_message, created_at
+     from public.square_calendar_sink_deliveries
+     where customer_id = $1
+     order by feed_id, created_at desc`,
+    [customerId]
+  );
+
+  return new Map(
+    result.rows.map((row) => [String(row.feed_id), mapDelivery(row)] as const)
+  );
+}
+
+export async function recordSquareCalendarSinkDelivery(input: {
+  channel: SquareCalendarSinkDeliveryChannel;
+  customerId: string;
+  errorMessage?: string | null;
+  feedId: string;
+  providerMessageId?: string | null;
+  recipient?: string | null;
+  status: SquareCalendarSinkDeliveryStatus;
+}) {
+  await ensureSquareCalendarSinkSettingsTable();
+  const result = await db.query(
+    `insert into public.square_calendar_sink_deliveries
+       (customer_id, feed_id, channel, recipient, status, provider_message_id, error_message)
+     values ($1, $2, $3, $4, $5, $6, $7)
+     returning id, channel, recipient, status, provider_message_id, error_message, created_at`,
+    [
+      input.customerId,
+      input.feedId,
+      input.channel,
+      input.recipient?.trim() || null,
+      input.status,
+      input.providerMessageId?.trim() || null,
+      input.errorMessage?.slice(0, 500) || null
+    ]
+  );
+
+  return mapDelivery(result.rows[0]);
+}
+
 export async function installSquareCalendarSink(customerId: string) {
   await ensureSquareCalendarSinkSettingsTable();
 
@@ -140,23 +258,24 @@ export async function uninstallSquareCalendarSink(customerId: string) {
 }
 
 export async function getSquareCalendarSinkOverview(customerId: string) {
-  const [connection, settings] = await Promise.all([
+  const [connection, settings, deliveries, subscription] = await Promise.all([
     getValidSquareConnectionByCustomerId(customerId),
-    listSquareCalendarSinkSettings(customerId)
+    listSquareCalendarSinkSettings(customerId),
+    listLatestSquareCalendarSinkDeliveries(customerId),
+    getActiveSubscriptionForProduct({ customerId, productSlug: pluginId })
   ]);
+  const textingEntitled = Boolean(subscription?.textingEnabled);
 
   if (!connection) {
     return {
       connected: false,
       connectionError: null,
       missingScopes: requiredSquareCalendarScopes,
-      feeds: settings.map((feed) => ({
-        ...feed,
-        teamMemberName: feed.calendarName,
-        upcomingShiftCount: 0
-      })),
+      feeds: buildEmployeeFeeds({ deliveries, settings }),
       settings: settings[0] ?? null,
       teamMembers: [],
+      textingEntitled,
+      textingPlanName: subscription?.planName ?? null,
       upcomingShifts: [],
       totalUpcomingShifts: 0
     };
@@ -171,13 +290,11 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
       connected: true,
       connectionError: null,
       missingScopes,
-      feeds: settings.map((feed) => ({
-        ...feed,
-        teamMemberName: feed.calendarName,
-        upcomingShiftCount: 0
-      })),
+      feeds: buildEmployeeFeeds({ deliveries, settings }),
       settings: settings[0] ?? null,
       teamMembers: [],
+      textingEntitled,
+      textingPlanName: subscription?.planName ?? null,
       upcomingShifts: [],
       totalUpcomingShifts: 0
     };
@@ -198,12 +315,6 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
           endAt
         })
       : [];
-    const memberNames = new Map(
-      teamMembers.map((member) => [
-        member.id,
-        [member.given_name, member.family_name].filter(Boolean).join(" ") || member.id
-      ])
-    );
     const shiftCounts = new Map<string, number>();
     for (const shift of upcomingShifts) {
       const teamMemberId = shift.published_shift_details?.team_member_id;
@@ -211,13 +322,7 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
         shiftCounts.set(teamMemberId, (shiftCounts.get(teamMemberId) ?? 0) + 1);
       }
     }
-    const feeds: SquareCalendarSinkEmployeeFeed[] = settings.map((feed) => ({
-      ...feed,
-      teamMemberName: feed.teamMemberId
-        ? memberNames.get(feed.teamMemberId) ?? feed.calendarName
-        : feed.calendarName,
-      upcomingShiftCount: feed.teamMemberId ? shiftCounts.get(feed.teamMemberId) ?? 0 : 0
-    }));
+    const feeds = buildEmployeeFeeds({ deliveries, settings, shiftCounts, teamMembers });
 
     return {
       connected: true,
@@ -226,6 +331,8 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
       feeds,
       settings: settings[0] ?? null,
       teamMembers,
+      textingEntitled,
+      textingPlanName: subscription?.planName ?? null,
       upcomingShifts,
       totalUpcomingShifts: upcomingShifts.length
     };
@@ -238,13 +345,11 @@ export async function getSquareCalendarSinkOverview(customerId: string) {
       connected: true,
       connectionError: "authentication" as const,
       missingScopes: requiredSquareCalendarScopes,
-      feeds: settings.map((feed) => ({
-        ...feed,
-        teamMemberName: feed.calendarName,
-        upcomingShiftCount: 0
-      })),
+      feeds: buildEmployeeFeeds({ deliveries, settings }),
       settings: settings[0] ?? null,
       teamMembers: [],
+      textingEntitled,
+      textingPlanName: subscription?.planName ?? null,
       upcomingShifts: [],
       totalUpcomingShifts: 0
     };
@@ -270,11 +375,31 @@ export async function upsertSquareCalendarSinkEmployeeFeed(input: {
     throw new Error("Choose an active Square team member.");
   }
 
-  await ensureSquareCalendarSinkSettingsTable();
   const teamMemberName = [teamMember.given_name, teamMember.family_name]
     .filter(Boolean)
     .join(" ") || teamMember.id;
   const calendarName = input.calendarName?.trim() || `${teamMemberName} Work`;
+  const feed = await upsertSquareCalendarSinkFeedRecord({
+    calendarName,
+    customerId: input.customerId,
+    teamMemberId: teamMember.id
+  });
+
+  await upsertSquarePluginInstallation({
+    customerId: input.customerId,
+    pluginId,
+    config: { status: "active" }
+  });
+
+  return { feed, teamMember };
+}
+
+async function upsertSquareCalendarSinkFeedRecord(input: {
+  calendarName: string;
+  customerId: string;
+  teamMemberId: string;
+}) {
+  await ensureSquareCalendarSinkSettingsTable();
   const result = await db.query(
     `insert into public.square_calendar_sink_feeds
        (customer_id, team_member_id, calendar_name, feed_token)
@@ -284,16 +409,51 @@ export async function upsertSquareCalendarSinkEmployeeFeed(input: {
                    updated_at = now()
      returning id, customer_id, team_member_id, calendar_name, feed_token, enabled,
                created_at, updated_at`,
-    [input.customerId, input.teamMemberId, calendarName, newFeedToken()]
+    [input.customerId, input.teamMemberId, input.calendarName, newFeedToken()]
+  );
+
+  return mapSettings(result.rows[0]);
+}
+
+export async function createMissingSquareCalendarSinkEmployeeFeeds(customerId: string) {
+  const connection = await getValidSquareConnectionByCustomerId(customerId);
+
+  if (!connection || !hasSquareScopes(connection.authorizedScopes, requiredSquareCalendarScopes)) {
+    throw new Error("Square must be connected with schedule and employee access.");
+  }
+
+  const [teamMembers, existingFeeds] = await Promise.all([
+    searchSquareTeamMembers(connection.accessToken),
+    listSquareCalendarSinkSettings(customerId)
+  ]);
+  const existingTeamMemberIds = new Set(
+    existingFeeds
+      .map((feed) => feed.teamMemberId)
+      .filter((teamMemberId): teamMemberId is string => Boolean(teamMemberId))
+  );
+  const missingTeamMembers = teamMembers.filter((member) => !existingTeamMemberIds.has(member.id));
+  const created = await Promise.all(
+    missingTeamMembers.map(async (teamMember) => {
+      const teamMemberName = [teamMember.given_name, teamMember.family_name]
+        .filter(Boolean)
+        .join(" ") || teamMember.id;
+      const feed = await upsertSquareCalendarSinkFeedRecord({
+        calendarName: `${teamMemberName} Work`,
+        customerId,
+        teamMemberId: teamMember.id
+      });
+
+      return { feed, teamMember };
+    })
   );
 
   await upsertSquarePluginInstallation({
-    customerId: input.customerId,
+    customerId,
     pluginId,
-    config: { status: "active" }
+    config: { status: created.length || existingFeeds.length ? "active" : "setup" }
   });
 
-  return mapSettings(result.rows[0]);
+  return created;
 }
 
 export async function rotateSquareCalendarSinkFeedToken(customerId: string, feedId: string) {

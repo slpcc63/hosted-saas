@@ -5,6 +5,7 @@ import { requireCurrentCustomer } from "@/lib/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { getSquareCalendarSinkOverview } from "@/lib/square-calendar-sink";
 import {
+  createMissingSquareCalendarSinkFeedsAction,
   createSquareCalendarSinkFeedAction,
   deleteSquareCalendarSinkFeedAction,
   rotateSquareCalendarSinkFeedAction,
@@ -12,7 +13,15 @@ import {
 } from "./actions";
 
 export type CalendarSinkManagerPageProps = {
-  searchParams?: Promise<{ error?: string; saved?: string }>;
+  searchParams?: Promise<{
+    created?: string;
+    error?: string;
+    failed?: string;
+    manual?: string;
+    missing?: string;
+    saved?: string;
+    sent?: string;
+  }>;
 };
 
 function teamMemberName(member: {
@@ -21,6 +30,43 @@ function teamMemberName(member: {
   id: string;
 }) {
   return [member.given_name, member.family_name].filter(Boolean).join(" ") || member.id;
+}
+
+function distributionResultMessage(params: {
+  created?: string;
+  failed?: string;
+  manual?: string;
+  missing?: string;
+  sent?: string;
+}) {
+  const created = Number(params.created ?? 0);
+  const sent = Number(params.sent ?? 0);
+  const manual = Number(params.manual ?? 0);
+  const missing = Number(params.missing ?? 0);
+  const failed = Number(params.failed ?? 0);
+  const details = [
+    sent ? `${sent} emailed` : null,
+    manual ? `${manual} ready for manual sharing` : null,
+    missing ? `${missing} missing an email address` : null,
+    failed ? `${failed} email ${failed === 1 ? "failure" : "failures"}` : null
+  ].filter(Boolean);
+
+  return `${created} employee ${created === 1 ? "calendar" : "calendars"} created${details.length ? ` — ${details.join(", ")}` : ""}.`;
+}
+
+function deliveryLabel(feed: {
+  emailAddress: string | null;
+  lastDelivery: {
+    channel: "email" | "manual" | "text";
+    recipient: string | null;
+    status: "failed" | "manual" | "needs_contact" | "sent";
+  } | null;
+}) {
+  if (!feed.lastDelivery) return "Not distributed yet";
+  if (feed.lastDelivery.status === "sent") return `Emailed to ${feed.lastDelivery.recipient}`;
+  if (feed.lastDelivery.status === "failed") return `Email failed for ${feed.lastDelivery.recipient}`;
+  if (feed.lastDelivery.status === "needs_contact") return "Needs an employee email address";
+  return feed.emailAddress ? `Ready to share manually with ${feed.emailAddress}` : "Ready for manual sharing";
 }
 
 export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkManagerPageProps) {
@@ -72,7 +118,13 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
 
         <div aria-live="polite" className="calendar-sink-messages">
           {params?.saved === "feed_created" ? (
-            <p className="form-success">Employee calendar created. Its private setup page is ready to share.</p>
+            <p className="form-success">{distributionResultMessage(params)}</p>
+          ) : null}
+          {params?.saved === "bulk_created" ? (
+            <p className="form-success">{distributionResultMessage(params)}</p>
+          ) : null}
+          {params?.saved === "bulk_none" ? (
+            <p className="form-success">Every active Square employee already has a calendar.</p>
           ) : null}
           {params?.saved === "square_connection" ? (
             <p className="form-success">Square connected successfully.</p>
@@ -128,10 +180,23 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
                     <select name="teamMemberId" defaultValue="" required>
                       <option value="" disabled>Choose an employee</option>
                       {availableTeamMembers.map((member) => (
-                        <option value={member.id} key={member.id}>{teamMemberName(member)}</option>
+                        <option value={member.id} key={member.id}>
+                          {teamMemberName(member)} — {member.email_address || "no email in Square"}
+                        </option>
                       ))}
                     </select>
                   </label>
+                  <fieldset className="calendar-delivery-choice">
+                    <legend>Distribution</legend>
+                    <label>
+                      <input name="distributionMode" type="radio" value="email" defaultChecked />
+                      <span><strong>Email automatically</strong><small>Uses the employee email in Square.</small></span>
+                    </label>
+                    <label>
+                      <input name="distributionMode" type="radio" value="manual" />
+                      <span><strong>Create without sending</strong><small>Share the private setup page yourself.</small></span>
+                    </label>
+                  </fieldset>
                   <p className="calendar-field-help">
                     This creates a unique private feed containing only that employee&apos;s published shifts.
                   </p>
@@ -151,22 +216,67 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
               <div className="calendar-card-heading">
                 <div>
                   <span className="calendar-step">2</span>
-                  <p className="calendar-card-kicker">Employee rollout</p>
-                  <h2>Share each setup page</h2>
+                  <p className="calendar-card-kicker">Company rollout</p>
+                  <h2>Create all missing calendars</h2>
                 </div>
               </div>
-              <ol className="calendar-subscribe-steps calendar-manager-steps">
-                <li>Create a calendar for each person on the Square roster.</li>
-                <li>Open their private setup page and send that page only to them.</li>
-                <li>They subscribe once; future published Square changes update automatically.</li>
-              </ol>
-              <div className="calendar-private-note">
-                <strong>Each employee address is private.</strong>
-                <span>Pause or replace an individual address if it is shared with the wrong person.</span>
-              </div>
+              {availableTeamMembers.length ? (
+                <form action={createMissingSquareCalendarSinkFeedsAction} className="auth-form calendar-settings-form">
+                  <p className="calendar-bulk-count">
+                    <strong>{availableTeamMembers.length}</strong> active {availableTeamMembers.length === 1 ? "employee does" : "employees do"} not have a calendar yet.
+                  </p>
+                  <fieldset className="calendar-delivery-choice">
+                    <legend>Distribution</legend>
+                    <label>
+                      <input name="distributionMode" type="radio" value="email" defaultChecked />
+                      <span><strong>Email automatically</strong><small>Missing email addresses remain flagged for manual delivery.</small></span>
+                    </label>
+                    <label>
+                      <input name="distributionMode" type="radio" value="manual" />
+                      <span><strong>Create without sending</strong><small>Generate every setup page for the manager to share.</small></span>
+                    </label>
+                  </fieldset>
+                  <details className="calendar-recipient-review">
+                    <summary>Review {availableTeamMembers.length} recipients</summary>
+                    <ul>
+                      {availableTeamMembers.map((member) => (
+                        <li key={member.id}>
+                          <span>{teamMemberName(member)}</span>
+                          <strong className={member.email_address ? "" : "calendar-contact-missing"}>
+                            {member.email_address || "Missing email — manual delivery required"}
+                          </strong>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                  <button className="pill primary pill-button calendar-primary-action" type="submit">
+                    Create {availableTeamMembers.length} missing {availableTeamMembers.length === 1 ? "calendar" : "calendars"}
+                  </button>
+                </form>
+              ) : (
+                <div className="calendar-empty-state">
+                  <strong>The whole Square roster is configured.</strong>
+                  <p>New active employees will appear here automatically.</p>
+                </div>
+              )}
             </section>
           </div>
         )}
+
+        <div className="calendar-messaging-entitlement">
+          <div>
+            <strong>Email distribution is available.</strong>
+            <span>Setup messages contain the private subscription page and no schedule details.</span>
+          </div>
+          <div>
+            <strong>Text distribution</strong>
+            <span>
+              {overview.textingEntitled
+                ? `Included with ${overview.textingPlanName ?? "the company plan"}; SMS delivery activation is next.`
+                : "Locked until the company subscribes to a texting-enabled plan."}
+            </span>
+          </div>
+        </div>
 
         <section className="calendar-employee-section">
           <div className="calendar-section-heading">
@@ -193,6 +303,9 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
                       <div>
                         <h3>{feed.teamMemberName}</h3>
                         <p>{feed.upcomingShiftCount} upcoming published {feed.upcomingShiftCount === 1 ? "shift" : "shifts"}</p>
+                        <p className={`calendar-delivery-label calendar-delivery-${feed.lastDelivery?.status ?? "pending"}`}>
+                          {deliveryLabel(feed)}
+                        </p>
                       </div>
                       <span className={`status-chip ${feed.enabled ? "calendar-chip-ready" : ""}`}>
                         {feed.enabled ? "Active" : "Paused"}

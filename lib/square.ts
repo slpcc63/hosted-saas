@@ -75,9 +75,11 @@ type SquareSearchTimecardsResponse = {
 };
 
 export type SquareTeamMember = {
+  email_address?: string;
   family_name?: string;
   given_name?: string;
   id: string;
+  phone_number?: string;
   reference_id?: string;
 };
 

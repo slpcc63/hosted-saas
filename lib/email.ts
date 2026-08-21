@@ -23,6 +23,7 @@ export type SendTransactionalEmailInput = {
   fromEmail?: string;
   fromName?: string;
   html: string;
+  idempotencyKey?: string;
   replyTo?: string;
   subject: string;
   text?: string;
@@ -107,7 +108,10 @@ export async function sendTransactionalEmail(input: SendTransactionalEmailInput)
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...(input.idempotencyKey?.trim()
+        ? { "Idempotency-Key": input.idempotencyKey.trim() }
+        : {})
     },
     body: JSON.stringify({
       from: formatFromHeader({
