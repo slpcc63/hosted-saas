@@ -110,6 +110,8 @@ export type TimeCardConfirmationAuditEvent = {
 export type TimeCardConfirmationSettings = {
   automationEnabled: boolean;
   customerId: string;
+  managerReminderEnabled: boolean;
+  managerReminderTimeLocal: string;
   periodDays: number;
   sendDayOfWeek: number;
   sendTimeLocal: string;
@@ -235,6 +237,8 @@ export async function ensureTimeCardEmailWorkflowTables() {
         automation_enabled boolean not null default false,
         send_day_of_week integer not null default 1 check (send_day_of_week between 0 and 6),
         send_time_local text not null default '09:00',
+        manager_reminder_enabled boolean not null default true,
+        manager_reminder_time_local text not null default '15:00',
         timezone text not null default '${defaultTimezone}',
         period_days integer not null default 7 check (period_days between 1 and 31),
         created_at timestamptz not null default now(),
@@ -294,6 +298,7 @@ export async function ensureTimeCardEmailWorkflowTables() {
         sent_count integer not null default 0,
         skipped_count integer not null default 0,
         failed_count integer not null default 0,
+        manager_reminder_sent_at timestamptz,
         completed_at timestamptz,
         created_at timestamptz not null default now(),
         unique (customer_id, period_start, period_end)
@@ -303,6 +308,12 @@ export async function ensureTimeCardEmailWorkflowTables() {
         add column if not exists reminder_count integer not null default 0;
       alter table public.time_card_confirmation_requests
         add column if not exists last_reminder_at timestamptz;
+      alter table public.time_card_confirmation_settings
+        add column if not exists manager_reminder_enabled boolean not null default true;
+      alter table public.time_card_confirmation_settings
+        add column if not exists manager_reminder_time_local text not null default '15:00';
+      alter table public.time_card_confirmation_runs
+        add column if not exists manager_reminder_sent_at timestamptz;
 
       create index if not exists time_card_contacts_customer_idx
         on public.time_card_employee_contacts(customer_id, active, display_name);
@@ -387,6 +398,8 @@ function mapConfirmationSettings(row: Record<string, unknown>): TimeCardConfirma
   return {
     customerId: String(row.customer_id),
     automationEnabled: Boolean(row.automation_enabled),
+    managerReminderEnabled: Boolean(row.manager_reminder_enabled),
+    managerReminderTimeLocal: String(row.manager_reminder_time_local),
     sendDayOfWeek: Number(row.send_day_of_week),
     sendTimeLocal: String(row.send_time_local),
     timezone: String(row.timezone),
@@ -402,7 +415,7 @@ export async function getOrCreateTimeCardConfirmationSettings(customerId: string
      on conflict (customer_id) do update
        set updated_at = public.time_card_confirmation_settings.updated_at
      returning customer_id, automation_enabled, send_day_of_week, send_time_local,
-               timezone, period_days`,
+               manager_reminder_enabled, manager_reminder_time_local, timezone, period_days`,
     [customerId]
   );
 
@@ -412,6 +425,8 @@ export async function getOrCreateTimeCardConfirmationSettings(customerId: string
 export async function upsertTimeCardConfirmationSettings(input: {
   automationEnabled: boolean;
   customerId: string;
+  managerReminderEnabled: boolean;
+  managerReminderTimeLocal: string;
   periodDays: number;
   sendDayOfWeek: number;
   sendTimeLocal: string;
@@ -424,6 +439,7 @@ export async function upsertTimeCardConfirmationSettings(input: {
     input.sendDayOfWeek < 0 ||
     input.sendDayOfWeek > 6 ||
     !/^\d{2}:\d{2}$/.test(input.sendTimeLocal) ||
+    !/^\d{2}:\d{2}$/.test(input.managerReminderTimeLocal) ||
     !Number.isInteger(input.periodDays) ||
     input.periodDays < 1 ||
     input.periodDays > 31
@@ -432,30 +448,36 @@ export async function upsertTimeCardConfirmationSettings(input: {
   }
 
   const [hour, minute] = input.sendTimeLocal.split(":").map(Number);
+  const [managerReminderHour, managerReminderMinute] = input.managerReminderTimeLocal.split(":").map(Number);
 
-  if (hour > 23 || minute > 59) {
+  if (hour > 23 || minute > 59 || managerReminderHour > 23 || managerReminderMinute > 59) {
     throw new Error("Confirmation automation settings are invalid");
   }
 
   const result = await db.query(
     `insert into public.time_card_confirmation_settings (
       customer_id, automation_enabled, send_day_of_week, send_time_local,
+      manager_reminder_enabled, manager_reminder_time_local,
       timezone, period_days, updated_at
-    ) values ($1, $2, $3, $4, $5, $6, now())
+    ) values ($1, $2, $3, $4, $5, $6, $7, $8, now())
     on conflict (customer_id) do update set
       automation_enabled = excluded.automation_enabled,
       send_day_of_week = excluded.send_day_of_week,
       send_time_local = excluded.send_time_local,
+      manager_reminder_enabled = excluded.manager_reminder_enabled,
+      manager_reminder_time_local = excluded.manager_reminder_time_local,
       timezone = excluded.timezone,
       period_days = excluded.period_days,
       updated_at = now()
     returning customer_id, automation_enabled, send_day_of_week, send_time_local,
-              timezone, period_days`,
+              manager_reminder_enabled, manager_reminder_time_local, timezone, period_days`,
     [
       input.customerId,
       input.automationEnabled,
       input.sendDayOfWeek,
       input.sendTimeLocal,
+      input.managerReminderEnabled,
+      input.managerReminderTimeLocal,
       normalizeTimezone(input.timezone),
       input.periodDays
     ]
@@ -1138,6 +1160,108 @@ export async function reviewTimeCardConfirmationRequest(input: {
   }
 }
 
+async function sendManagerOutstandingReminder(input: {
+  customerId: string;
+  periodEnd: string;
+  periodStart: string;
+}) {
+  const runResult = await db.query(
+    `select runs.id, customers.email as manager_email, customers.company_name,
+            customers.contact_name
+     from public.time_card_confirmation_runs runs
+     inner join public.customer_profiles customers on customers.id = runs.customer_id
+     where runs.customer_id = $1 and runs.period_start = $2 and runs.period_end = $3
+     limit 1`,
+    [input.customerId, input.periodStart, input.periodEnd]
+  );
+  const run = runResult.rows[0];
+
+  if (!run) {
+    return { outstandingCount: 0, status: "skipped_no_confirmation_run" };
+  }
+
+  const claimResult = await db.query(
+    `update public.time_card_confirmation_runs
+     set manager_reminder_sent_at = now()
+     where id = $1 and manager_reminder_sent_at is null
+     returning id`,
+    [run.id]
+  );
+
+  if (!claimResult.rows[0]) {
+    return { outstandingCount: 0, status: "skipped_already_notified" };
+  }
+
+  const outstandingResult = await db.query(
+    `select employee_name, employee_email, status
+     from public.time_card_confirmation_requests
+     where customer_id = $1 and period_start = $2 and period_end = $3
+       and status in ('pending', 'delivery_failed')
+     order by employee_name`,
+    [input.customerId, input.periodStart, input.periodEnd]
+  );
+  const outstanding = outstandingResult.rows;
+
+  if (!outstanding.length) {
+    return { outstandingCount: 0, status: "no_outstanding_employees" };
+  }
+
+  const managerEmail = String(run.manager_email ?? "").trim().toLowerCase();
+  const companyName =
+    (typeof run.company_name === "string" && run.company_name.trim()) ||
+    (typeof run.contact_name === "string" && run.contact_name.trim()) ||
+    "Your team";
+
+  if (!isValidEmail(managerEmail)) {
+    return { outstandingCount: outstanding.length, status: "skipped_invalid_manager_email" };
+  }
+
+  const reviewUrl = `${getAppOrigin()}/time-card-manager/responses?status=pending`;
+  const htmlItems = outstanding.map((request) => {
+    const deliveryNote = request.status === "delivery_failed" ? " — employee email failed" : "";
+    return `<li><strong>${escapeHtml(String(request.employee_name))}</strong>${escapeHtml(deliveryNote)}</li>`;
+  }).join("");
+  const textItems = outstanding.map((request) => {
+    const deliveryNote = request.status === "delivery_failed" ? " (employee email failed)" : "";
+    return `- ${String(request.employee_name)}${deliveryNote}`;
+  }).join("\n");
+
+  try {
+    await sendTransactionalEmail({
+      to: managerEmail,
+      subject: `${companyName}: ${outstanding.length} outstanding time confirmation${outstanding.length === 1 ? "" : "s"}`,
+      idempotencyKey: `time-card-manager-outstanding-${String(run.id)}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2933;">
+          <h1>Outstanding employee time confirmations</h1>
+          <p>The following employees have not responded for <strong>${escapeHtml(input.periodStart)}</strong>
+            through <strong>${escapeHtml(input.periodEnd)}</strong>:</p>
+          <ul>${htmlItems}</ul>
+          <p>You can message them personally, then track their responses in the manager inbox.</p>
+          <p><a href="${escapeHtml(reviewUrl)}">Open outstanding confirmations</a></p>
+        </div>
+      `,
+      text: [
+        `Outstanding employee time confirmations for ${input.periodStart} through ${input.periodEnd}:`,
+        "",
+        textItems,
+        "",
+        `Open outstanding confirmations: ${reviewUrl}`
+      ].join("\n")
+    });
+  } catch (error) {
+    await db.query(
+      `update public.time_card_confirmation_runs
+       set manager_reminder_sent_at = null
+       where id = $1`,
+      [run.id]
+    );
+    throw error;
+  }
+
+  return { outstandingCount: outstanding.length, status: "manager_notified" };
+}
+
 export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Date }) {
   await ensureTimeCardEmailWorkflowTables();
   const now = input?.now ?? new Date();
@@ -1146,6 +1270,7 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
     return {
       now: now.toISOString(),
       dueCustomers: 0,
+      managerReminders: [],
       sentCount: 0,
       results: [],
       status: "automation_disabled"
@@ -1158,13 +1283,14 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
     : 60;
   const settingsResult = await db.query(
     `select settings.customer_id, settings.automation_enabled, settings.send_day_of_week,
-            settings.send_time_local, settings.timezone, settings.period_days
+            settings.send_time_local, settings.manager_reminder_enabled,
+            settings.manager_reminder_time_local, settings.timezone, settings.period_days
      from public.time_card_confirmation_settings settings
      inner join public.customer_profiles customers on customers.id = settings.customer_id
      where settings.automation_enabled = true and customers.status = 'active'`
   );
-  const dueSettings = settingsResult.rows
-    .map((row) => mapConfirmationSettings(row))
+  const settings = settingsResult.rows.map((row) => mapConfirmationSettings(row));
+  const dueSettings = settings
     .filter((settings) => isWeeklyConfirmationScheduleDue({
       now,
       dayOfWeek: settings.sendDayOfWeek,
@@ -1283,9 +1409,52 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
     });
   }
 
+  const managerReminders: Array<{
+    customerId: string;
+    outstandingCount: number;
+    status: string;
+  }> = [];
+  const dueManagerReminders = settings.filter((setting) =>
+    setting.managerReminderEnabled && isWeeklyConfirmationScheduleDue({
+      now,
+      dayOfWeek: setting.sendDayOfWeek,
+      timeLocal: setting.managerReminderTimeLocal,
+      timezone: setting.timezone,
+      windowMinutes
+    })
+  );
+
+  for (const setting of dueManagerReminders) {
+    const { periodStart, periodEnd } = buildCompletedConfirmationPeriod({
+      now,
+      timezone: setting.timezone,
+      periodDays: setting.periodDays
+    });
+
+    try {
+      const reminder = await sendManagerOutstandingReminder({
+        customerId: setting.customerId,
+        periodStart,
+        periodEnd
+      });
+      managerReminders.push({ customerId: setting.customerId, ...reminder });
+    } catch (error) {
+      console.error("[time-card-confirmation] manager outstanding reminder failed", {
+        customerId: setting.customerId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      managerReminders.push({
+        customerId: setting.customerId,
+        outstandingCount: 0,
+        status: "notification_failed"
+      });
+    }
+  }
+
   return {
     now: now.toISOString(),
     dueCustomers: dueSettings.length,
+    managerReminders,
     sentCount: results.reduce((total, result) => total + result.sentCount, 0),
     results
   };

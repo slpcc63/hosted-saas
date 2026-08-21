@@ -443,7 +443,7 @@ export default async function ManagerResponsesPage({
                   <strong>Weekly automation</strong>
                   <small>
                     {weekdayOptions[confirmationSettings.sendDayOfWeek]} at {formatScheduleTime(confirmationSettings.sendTimeLocal)}
-                    {` · ${emailReadyCount} email-ready`}
+                    {` · manager summary ${formatScheduleTime(confirmationSettings.managerReminderTimeLocal)} · ${emailReadyCount} email-ready`}
                   </small>
                 </span>
                 <span className="status-chip">
@@ -506,6 +506,27 @@ export default async function ManagerResponsesPage({
                 <span>Days in each confirmation period</span>
                 <input disabled={!subscription} defaultValue={confirmationSettings.periodDays} max="31" min="1" name="periodDays" type="number" />
               </label>
+              <label className="checkbox-row">
+                <input
+                  defaultChecked={confirmationSettings.managerReminderEnabled}
+                  disabled={!automationLive || !subscription}
+                  name="managerReminderEnabled"
+                  type="checkbox"
+                />
+                <span>Email the manager a list of employees who have not responded</span>
+              </label>
+              <label className="field">
+                <span>Manager summary time</span>
+                <input
+                  disabled={!subscription}
+                  defaultValue={confirmationSettings.managerReminderTimeLocal}
+                  name="managerReminderTimeLocal"
+                  type="time"
+                />
+              </label>
+              <p className="auth-helper">
+                The manager summary runs on the same weekday as the employee email schedule.
+              </p>
               {!subscription ? (
                 <p className="auth-helper">Activate a subscription before weekly sending can be enabled.</p>
               ) : null}

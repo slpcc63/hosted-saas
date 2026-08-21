@@ -639,6 +639,8 @@ export async function saveTimeCardConfirmationSettingsAction(formData: FormData)
     await upsertTimeCardConfirmationSettings({
       customerId: customer.id,
       automationEnabled: String(formData.get("automationEnabled") ?? "") === "on",
+      managerReminderEnabled: String(formData.get("managerReminderEnabled") ?? "") === "on",
+      managerReminderTimeLocal: String(formData.get("managerReminderTimeLocal") ?? ""),
       sendDayOfWeek: Number(formData.get("sendDayOfWeek")),
       sendTimeLocal: String(formData.get("sendTimeLocal") ?? ""),
       timezone: String(formData.get("timezone") ?? ""),

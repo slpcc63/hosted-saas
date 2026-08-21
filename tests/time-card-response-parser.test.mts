@@ -107,6 +107,24 @@ test("allows a delayed automation runner inside the hardened one-hour window", (
   }), true);
 });
 
+test("detects the Sunday afternoon manager-summary window in Pacific time", () => {
+  assert.equal(isWeeklyConfirmationScheduleDue({
+    dayOfWeek: 0,
+    now: new Date("2026-08-23T22:00:00Z"),
+    timeLocal: "15:00",
+    timezone: "America/Los_Angeles",
+    windowMinutes: 60
+  }), true);
+
+  assert.equal(isWeeklyConfirmationScheduleDue({
+    dayOfWeek: 0,
+    now: new Date("2026-08-23T23:01:00Z"),
+    timeLocal: "15:00",
+    timezone: "America/Los_Angeles",
+    windowMinutes: 60
+  }), false);
+});
+
 test("builds a completed seven-day period ending yesterday in the configured timezone", () => {
   assert.deepEqual(
     buildCompletedConfirmationPeriod({
