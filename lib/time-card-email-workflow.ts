@@ -773,7 +773,7 @@ export async function resendTimeCardConfirmationRequest(input: {
   const result = await db.query(
     `select requests.id, requests.customer_id, requests.employee_name,
             requests.employee_email, requests.period_start, requests.period_end,
-            requests.status, requests.reminder_count, requests.updated_at,
+            requests.status, requests.reminder_count, requests.response_token_hash,
             customers.company_name, customers.contact_name
      from public.time_card_confirmation_requests requests
      inner join public.customer_profiles customers on customers.id = requests.customer_id
@@ -811,9 +811,11 @@ export async function resendTimeCardConfirmationRequest(input: {
      set status = 'pending', response_token_hash = $3,
          token_expires_at = now() + ($4 * interval '1 day'),
          reminder_count = reminder_count + 1, last_reminder_at = now(), updated_at = now()
-     where id = $1 and customer_id = $2 and updated_at = $5
+     where id = $1 and customer_id = $2
+       and status in ('pending', 'delivery_failed')
+       and response_token_hash = $5
      returning id, reminder_count`,
-    [input.requestId, input.customerId, tokenHash, expirationDays, request.updated_at]
+    [input.requestId, input.customerId, tokenHash, expirationDays, request.response_token_hash]
   );
 
   if (!claimResult.rows[0]) {

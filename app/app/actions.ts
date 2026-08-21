@@ -733,7 +733,12 @@ export async function resendTimeCardConfirmationRequestAction(formData: FormData
       customerId: customer.id,
       requestId: String(formData.get("requestId") ?? "").trim()
     });
-  } catch {
+  } catch (error) {
+    console.error("[time-card-confirmation] reminder send failed", {
+      customerId: customer.id,
+      message: error instanceof Error ? error.message : String(error),
+      requestId: String(formData.get("requestId") ?? "").trim()
+    });
     failed = true;
   }
 
