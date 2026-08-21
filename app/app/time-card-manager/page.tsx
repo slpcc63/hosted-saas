@@ -45,6 +45,9 @@ export default async function TimeCardManagerPage({
   const routing = await getPublicRouting();
   const redirectTo = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
   const subscriptionsPath = routing.appHost ? "/subscriptions" : "/app/subscriptions";
+  const responsesPath = routing.appHost
+    ? "/time-card-manager/responses"
+    : "/app/time-card-manager/responses";
   const squareConnectHref = `/api/integrations/square/connect?plugin=square-time-card-manager`;
   const { customer } = await requireCurrentCustomer(redirectTo, "/app");
   await ensureSeedCatalog();
@@ -68,6 +71,16 @@ export default async function TimeCardManagerPage({
               production. Approved SMS stays visible here, but it is not active
               until the texting provider is connected.
             </p>
+            <div className="dashboard-alert">
+              <strong>Employee email confirmations</strong>
+              <p>
+                Sync the Square employee roster, send secure confirmation emails,
+                and approve or reject submitted time in the manager inbox.
+              </p>
+              <a className="pill primary" href={responsesPath}>
+                Open confirmation inbox
+              </a>
+            </div>
             {overview.alertMessage ? (
               <div className="dashboard-alert warning">
                 <strong>Notification limit reached</strong>

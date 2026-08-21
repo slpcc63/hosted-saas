@@ -194,3 +194,17 @@ Important notes:
   uses GitHub Actions as the runner.
 - If you later upgrade Vercel and want platform-native cron, the route can be
   reused without changing the automation engine.
+
+## Phase 1 employee confirmations
+
+Phase 1 uses email only. Managers sync active Square employees, add an email
+address and timezone for each employee, send a dated confirmation request, and
+review the employee's secure response in the manager inbox.
+
+- Employees choose either "I did not work" or "I worked" in the secure form.
+- Worked responses include a shift date, time in, and time out for manager review.
+- Every response requires an explicit manager approval or rejection.
+- Approved responses are retained as authoritative app records but are not yet
+  written back to Square.
+- SMS remains disabled unless `TIME_CARD_TEXTING_LIVE=true` is explicitly set
+  in a later release with a configured Twilio account.

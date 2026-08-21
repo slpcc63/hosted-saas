@@ -1271,7 +1271,130 @@ textarea {
   text-align: center;
 }
 
+.delivery-log {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.delivery-log-row {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.95rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.delivery-log-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.delivery-log-channel,
+.delivery-log-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.9rem;
+  padding: 0.1rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.delivery-log-channel,
+.delivery-log-status.sent {
+  color: #18523a;
+  background: rgba(67, 150, 104, 0.16);
+}
+
+.delivery-log-status.failed {
+  color: #8f1f33;
+  background: rgba(197, 77, 109, 0.16);
+}
+
+.delivery-log-status.blocked {
+  color: #8a5b12;
+  background: rgba(222, 169, 75, 0.22);
+}
+
+.delivery-log-time {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.manager-workflow-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.8fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.manager-workflow-main {
+  min-width: 0;
+}
+
+.form-grid-two,
+.form-grid-three {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.form-grid-two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.form-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.response-choice-group {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.response-choice-group legend {
+  margin-bottom: 0.65rem;
+  font-weight: 700;
+}
+
+.response-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--card-muted);
+  cursor: pointer;
+}
+
+.response-choice input {
+  width: auto;
+  margin-top: 0.25rem;
+}
+
+.response-choice span {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.confirmation-send-form {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
 @media (max-width: 960px) {
+  .manager-workflow-grid,
   .calendar-manager-setup-grid,
   .calendar-employee-grid,
   .calendar-messaging-entitlement {
@@ -1280,6 +1403,11 @@ textarea {
 }
 
 @media (max-width: 720px) {
+  .form-grid-two,
+  .form-grid-three {
+    grid-template-columns: 1fr;
+  }
+
   .calendar-section-heading,
   .calendar-employee-topline {
     flex-direction: column;

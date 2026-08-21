@@ -9,7 +9,10 @@ import {
   resolveManagedSenderEmail,
   sendTransactionalEmail
 } from "@/lib/email";
-import { getSquareConnectionByCustomerId } from "@/lib/square-connections";
+import {
+  getSquareConnectionByCustomerId,
+  getValidSquareConnectionByCustomerId
+} from "@/lib/square-connections";
 import {
   hasSquareScopes,
   listSquareLocations,
@@ -1361,7 +1364,7 @@ export async function findMissedClockOutCandidatesForCustomer(input: {
   customerId: string;
   thresholdHours: number;
 }) {
-  const connection = await getSquareConnectionByCustomerId(input.customerId);
+  const connection = await getValidSquareConnectionByCustomerId(input.customerId);
 
   if (!connection) {
     throw new Error("Square is not connected for this customer");

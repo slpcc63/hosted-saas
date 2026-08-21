@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 
 import { runTimeCardManagerAutomationBatch } from "@/lib/square-time-card-manager";
+import { runTimeCardConfirmationAutomationBatch } from "@/lib/time-card-email-workflow";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +19,10 @@ export async function GET(request: NextRequest) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await runTimeCardManagerAutomationBatch();
+  const [result, confirmations] = await Promise.all([
+    runTimeCardManagerAutomationBatch(),
+    runTimeCardConfirmationAutomationBatch()
+  ]);
 
-  return Response.json({ ok: true, result });
+  return Response.json({ ok: true, result: { ...result, confirmations } });
 }

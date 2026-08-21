@@ -39,6 +39,14 @@ import {
   getActiveSubscriptionForProduct,
   updateSubscriptionCustomSettings
 } from "@/lib/subscriptions";
+import {
+  createAndSendTimeCardConfirmationRequest,
+  reviewTimeCardConfirmationRequest,
+  submitTimeCardEmployeeResponse,
+  syncTimeCardEmployeesFromSquare,
+  updateTimeCardEmployeeContact,
+  upsertTimeCardConfirmationSettings
+} from "@/lib/time-card-email-workflow";
 
 function slugify(value: string) {
   return value
@@ -47,6 +55,19 @@ function slugify(value: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 64);
+}
+
+function getTimeCardWorkflowRedirect(value: FormDataEntryValue | null) {
+  const candidate = String(value ?? "");
+
+  if (
+    candidate === "/time-card-manager/responses" ||
+    candidate === "/app/time-card-manager/responses"
+  ) {
+    return candidate;
+  }
+
+  return "/app/time-card-manager/responses";
 }
 
 export async function createProductAction(formData: FormData) {
@@ -527,4 +548,222 @@ export async function removeTimeCardManagerScheduleEntryAction(formData: FormDat
 
   revalidatePath("/app/time-card-manager");
   redirect(`${redirectTo}?saved=schedule_removed`);
+}
+
+export async function syncTimeCardEmployeesAction(formData: FormData) {
+  const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
+  const session = await requireSession(redirectTo);
+  const customer = await getCustomerByUserId(session.user.id);
+
+  if (!customer) {
+    redirect("/app");
+  }
+
+  let count = 0;
+  let errorCode: string | null = null;
+
+  try {
+    count = await syncTimeCardEmployeesFromSquare(customer.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to sync employees";
+    errorCode = message.includes("not connected")
+      ? "employee_sync_not_connected"
+      : message.includes("employee read access")
+        ? "employee_sync_missing_scope"
+        : "employee_sync_failed";
+  }
+
+  if (errorCode) {
+    redirect(`${redirectTo}?error=${errorCode}`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${redirectTo}?saved=employees_synced&count=${encodeURIComponent(String(count))}`);
+}
+
+export async function saveTimeCardEmployeeContactAction(formData: FormData) {
+  const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
+  const session = await requireSession(redirectTo);
+  const customer = await getCustomerByUserId(session.user.id);
+
+  if (!customer) {
+    redirect("/app");
+  }
+
+  const employeeId = String(formData.get("employeeId") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const timezone = String(formData.get("timezone") ?? "").trim();
+  let failed = false;
+
+  try {
+    await updateTimeCardEmployeeContact({
+      customerId: customer.id,
+      employeeId,
+      email,
+      timezone
+    });
+  } catch {
+    failed = true;
+  }
+
+  if (failed) {
+    redirect(`${redirectTo}?error=employee_contact_invalid`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${redirectTo}?saved=employee_contact`);
+}
+
+export async function saveTimeCardConfirmationSettingsAction(formData: FormData) {
+  const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
+  const session = await requireSession(redirectTo);
+  const customer = await getCustomerByUserId(session.user.id);
+
+  if (!customer) {
+    redirect("/app");
+  }
+
+  let failed = false;
+
+  try {
+    await upsertTimeCardConfirmationSettings({
+      customerId: customer.id,
+      automationEnabled: String(formData.get("automationEnabled") ?? "") === "on",
+      sendDayOfWeek: Number(formData.get("sendDayOfWeek")),
+      sendTimeLocal: String(formData.get("sendTimeLocal") ?? ""),
+      timezone: String(formData.get("timezone") ?? ""),
+      periodDays: Number(formData.get("periodDays"))
+    });
+  } catch {
+    failed = true;
+  }
+
+  if (failed) {
+    redirect(`${redirectTo}?error=confirmation_settings_invalid`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${redirectTo}?saved=confirmation_settings`);
+}
+
+export async function sendTimeCardConfirmationRequestAction(formData: FormData) {
+  const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
+  const session = await requireSession(redirectTo);
+  const customer = await getCustomerByUserId(session.user.id);
+
+  if (!customer) {
+    redirect("/app");
+  }
+
+  const subscription = await getActiveSubscriptionForProduct({
+    customerId: customer.id,
+    productSlug: "square-time-card-manager"
+  });
+
+  if (!subscription) {
+    redirect(`${redirectTo}?error=confirmation_subscription_missing`);
+  }
+
+  const employeeId = String(formData.get("employeeId") ?? "").trim();
+  const periodStart = String(formData.get("periodStart") ?? "").trim();
+  const periodEnd = String(formData.get("periodEnd") ?? "").trim();
+  let errorCode: string | null = null;
+
+  try {
+    await createAndSendTimeCardConfirmationRequest({
+      customerId: customer.id,
+      employeeId,
+      periodStart,
+      periodEnd
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to send request";
+    errorCode = message.includes("valid email")
+      ? "confirmation_employee_email_missing"
+      : message.includes("already exists")
+        ? "confirmation_duplicate"
+      : message.includes("period")
+        ? "confirmation_period_invalid"
+        : "confirmation_send_failed";
+  }
+
+  if (errorCode) {
+    redirect(`${redirectTo}?error=${errorCode}`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${redirectTo}?saved=confirmation_sent`);
+}
+
+export async function submitTimeCardEmployeeResponseAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const responsePath = `/app/time-card-response/${encodeURIComponent(token)}`;
+  let errorCode: string | null = null;
+
+  try {
+    await submitTimeCardEmployeeResponse({
+      token,
+      responseCode: String(formData.get("responseCode") ?? ""),
+      shiftDate: String(formData.get("shiftDate") ?? ""),
+      timeIn: String(formData.get("timeIn") ?? ""),
+      timeOut: String(formData.get("timeOut") ?? ""),
+      responseNote: String(formData.get("responseNote") ?? "")
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to submit response";
+    errorCode = message.includes("expired")
+      ? "response_expired"
+      : message.includes("already") || message.includes("no longer")
+        ? "response_already_submitted"
+        : message.includes("invalid")
+          ? "response_invalid"
+          : "response_validation";
+  }
+
+  if (errorCode) {
+    redirect(`${responsePath}?error=${errorCode}`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${responsePath}?saved=response`);
+}
+
+export async function reviewTimeCardConfirmationRequestAction(formData: FormData) {
+  const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
+  const session = await requireSession(redirectTo);
+  const customer = await getCustomerByUserId(session.user.id);
+
+  if (!customer) {
+    redirect("/app");
+  }
+
+  const decision = String(formData.get("decision") ?? "");
+
+  if (decision !== "approved" && decision !== "rejected") {
+    redirect(`${redirectTo}?error=review_invalid`);
+  }
+
+  let failed = false;
+
+  try {
+    await reviewTimeCardConfirmationRequest({
+      customerId: customer.id,
+      reviewerUserId: session.user.id,
+      requestId: String(formData.get("requestId") ?? ""),
+      decision,
+      shiftDate: String(formData.get("shiftDate") ?? ""),
+      timeIn: String(formData.get("timeIn") ?? ""),
+      timeOut: String(formData.get("timeOut") ?? ""),
+      managerNote: String(formData.get("managerNote") ?? "")
+    });
+  } catch {
+    failed = true;
+  }
+
+  if (failed) {
+    redirect(`${redirectTo}?error=review_invalid`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${redirectTo}?saved=${decision}`);
 }
