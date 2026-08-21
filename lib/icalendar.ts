@@ -76,7 +76,7 @@ export function buildSquareShiftCalendar(input: {
     const role = jobNames.get(details.job_id) ?? details.job_id ?? "Role";
     const shiftStart = new Date(details.start_at).getTime();
     const shiftEnd = new Date(details.end_at).getTime();
-    const coworker = input.coworkerShifts.find((candidate) => {
+    const coworkers = input.coworkerShifts.filter((candidate) => {
       const candidateDetails = candidate.published_shift_details;
       if (!candidateDetails || candidateDetails.is_deleted) return false;
       if (!candidateDetails.team_member_id || candidateDetails.team_member_id === details.team_member_id) return false;
@@ -85,10 +85,19 @@ export function buildSquareShiftCalendar(input: {
       return new Date(candidateDetails.start_at).getTime() < shiftEnd &&
         new Date(candidateDetails.end_at).getTime() > shiftStart;
     });
-    const coworkerDetails = coworker?.published_shift_details;
-    const coworkerSummary = coworkerDetails?.team_member_id
-      ? ` with ${teamMemberNames.get(coworkerDetails.team_member_id) ?? coworkerDetails.team_member_id} (${jobNames.get(coworkerDetails.job_id) ?? coworkerDetails.job_id ?? "Role"})`
-      : "";
+    const coworkerLabels = Array.from(
+      new Map(
+        coworkers.flatMap((coworker) => {
+          const coworkerDetails = coworker.published_shift_details;
+          if (!coworkerDetails?.team_member_id) return [];
+
+          const coworkerName = teamMemberNames.get(coworkerDetails.team_member_id) ?? coworkerDetails.team_member_id;
+          const coworkerRole = jobNames.get(coworkerDetails.job_id) ?? coworkerDetails.job_id ?? "Role";
+          return [[coworkerDetails.team_member_id, `${coworkerName} (${coworkerRole})`] as const];
+        })
+      ).values()
+    );
+    const coworkerSummary = coworkerLabels.length ? ` with ${coworkerLabels.join(" and ")}` : "";
     const summary = `${primaryName} shift as ${role}${coworkerSummary}`;
 
     lines.push(

@@ -149,6 +149,16 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
           ) : null}
         </div>
 
+        {squareReady ? (
+          <div className="dashboard-alert warning">
+            <strong>Publish schedule changes in Square</strong>
+            <p>
+              Draft shifts do not appear in employee calendars. After publishing, subscribed
+              calendars refresh automatically—you do not need to delete, replace, or recreate a feed.
+            </p>
+          </div>
+        ) : null}
+
         {!squareReady ? (
           <section className="dashboard-card calendar-connect-card">
             <div className="dashboard-alert warning">
