@@ -43,6 +43,7 @@ import {
   createAndSendTimeCardConfirmationRequest,
   resendTimeCardConfirmationRequest,
   reviewTimeCardConfirmationRequest,
+  saveTimeCardEmployeeSmsConsent,
   submitTimeCardEmployeeResponse,
   syncTimeCardEmployeesFromSquare,
   updateTimeCardEmployeeContact,
@@ -781,6 +782,35 @@ export async function submitTimeCardEmployeeResponseAction(formData: FormData) {
 
   revalidatePath("/app/time-card-manager/responses");
   redirect(`${responsePath}?saved=response`);
+}
+
+export async function saveTimeCardEmployeeSmsConsentAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const responsePath = `/app/time-card-response/${encodeURIComponent(token)}`;
+  let errorCode: string | null = null;
+
+  try {
+    await saveTimeCardEmployeeSmsConsent({
+      consent: String(formData.get("smsConsent") ?? "") === "on",
+      phone: String(formData.get("phone") ?? ""),
+      token
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to save SMS consent";
+    errorCode = message.includes("expired")
+      ? "response_expired"
+      : message.includes("invalid")
+        ? "response_invalid"
+        : "sms_consent_invalid";
+  }
+
+  if (errorCode) {
+    redirect(`${responsePath}?error=${errorCode}`);
+  }
+
+  revalidatePath("/app/time-card-manager/responses");
+  revalidatePath(responsePath);
+  redirect(`${responsePath}?saved=sms_consent`);
 }
 
 export async function reviewTimeCardConfirmationRequestAction(formData: FormData) {

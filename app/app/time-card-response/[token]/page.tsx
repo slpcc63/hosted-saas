@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 
-import { submitTimeCardEmployeeResponseAction } from "@/app/app/actions";
+import {
+  saveTimeCardEmployeeSmsConsentAction,
+  submitTimeCardEmployeeResponseAction
+} from "@/app/app/actions";
 import { SiteHeader } from "@/components/site-header";
 import { getPublicTimeCardConfirmationRequest } from "@/lib/time-card-email-workflow";
 
@@ -48,6 +51,12 @@ export default async function EmployeeResponsePage({
                 an approved record.
               </p>
             ) : null}
+            {query?.saved === "sms_consent" ? (
+              <p className="form-success">
+                Text-message consent was saved. Future Time Card Manager requests may
+                be sent to your mobile number.
+              </p>
+            ) : null}
             {query?.error === "response_expired" || expired ? (
               <p className="form-error">
                 This private link has expired. Ask your manager to send a new request.
@@ -63,6 +72,11 @@ export default async function EmployeeResponsePage({
               <p className="form-error">
                 Choose whether you worked. If you worked, provide a valid shift date,
                 time in, and time out.
+              </p>
+            ) : null}
+            {query?.error === "sms_consent_invalid" ? (
+              <p className="form-error">
+                Enter a valid 10-digit US mobile number and check the consent box.
               </p>
             ) : null}
 
@@ -125,6 +139,48 @@ export default async function EmployeeResponsePage({
               </div>
             ) : !expired ? (
               <p className="form-error">This request is no longer accepting responses.</p>
+            ) : null}
+
+            {!expired ? (
+              <section className="sms-consent-panel" aria-labelledby="sms-consent-heading">
+                <div className="eyebrow">Optional text notifications</div>
+                <h2 id="sms-consent-heading">Receive future confirmations by text</h2>
+                {request.smsConsentAt ? (
+                  <p className="form-success">
+                    Text notifications are enabled for {request.maskedPhone ?? "your saved number"}.
+                  </p>
+                ) : (
+                  <form action={saveTimeCardEmployeeSmsConsentAction} className="auth-form">
+                    <input name="token" type="hidden" value={token} />
+                    <label className="field">
+                      <span>US mobile number</span>
+                      <input
+                        autoComplete="tel"
+                        inputMode="tel"
+                        name="phone"
+                        placeholder="(555) 555-0123"
+                        required
+                        type="tel"
+                      />
+                    </label>
+                    <label className="consent-checkbox">
+                      <input name="smsConsent" required type="checkbox" />
+                      <span>
+                        I agree to receive recurring SLPCC63 Time Card Manager texts
+                        about weekly time confirmations, reminders, and response receipts
+                        at the number provided. Message frequency varies, typically 1–3
+                        messages per week. Message and data rates may apply. Consent is not
+                        a condition of employment. Reply <strong>STOP</strong> to opt out or
+                        <strong> HELP</strong> for help. View the <a href="/terms">Terms</a>
+                        {" "}and <a href="/privacy">Privacy Policy</a>.
+                      </span>
+                    </label>
+                    <button className="pill primary pill-button" type="submit">
+                      Agree and enable texts
+                    </button>
+                  </form>
+                )}
+              </section>
             ) : null}
           </article>
 

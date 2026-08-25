@@ -1555,6 +1555,78 @@ textarea {
   border-top: 1px solid var(--border);
 }
 
+.legal-page {
+  padding: 2.5rem 0 4rem;
+}
+
+.legal-card {
+  width: min(52rem, 100%);
+  margin: 0 auto;
+  padding: clamp(1.4rem, 4vw, 2.5rem);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+.legal-card h1 {
+  margin: 0 0 1.5rem;
+  font-size: clamp(2.1rem, 5vw, 3.5rem);
+  letter-spacing: -0.04em;
+}
+
+.legal-card h2 {
+  margin: 2rem 0 0.6rem;
+  font-size: 1.15rem;
+}
+
+.legal-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.75;
+}
+
+.legal-card a,
+.consent-checkbox a {
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.18em;
+}
+
+.sms-consent-panel {
+  display: grid;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--card-muted);
+}
+
+.sms-consent-panel h2 {
+  margin: 0;
+}
+
+.consent-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.consent-checkbox input {
+  width: auto;
+  flex: 0 0 auto;
+  margin-top: 0.28rem;
+}
+
+.consent-example-card .sms-consent-panel {
+  margin-bottom: 2rem;
+}
+
 @media (max-width: 960px) {
   .manager-workflow-grid,
   .calendar-manager-setup-grid,

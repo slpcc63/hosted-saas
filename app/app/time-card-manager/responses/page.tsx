@@ -609,8 +609,19 @@ export default async function ManagerResponsesPage({
                       <h2>{employee.displayName}</h2>
                       <p>{employee.active ? "Active in Square" : "No longer active in Square"}</p>
                     </div>
-                    <span className="status-chip">{employee.email ? "email ready" : "needs email"}</span>
+                    <span className="status-chip">
+                      {employee.smsConsentStatus === "opted_in"
+                        ? "email + text ready"
+                        : employee.email
+                          ? "email ready"
+                          : "needs email"}
+                    </span>
                   </div>
+                  {employee.smsConsentStatus === "opted_in" && employee.phone ? (
+                    <p className="auth-helper">
+                      Employee consented to texts ending in {employee.phone.slice(-4)}.
+                    </p>
+                  ) : null}
                   <form action={saveTimeCardEmployeeContactAction} className="auth-form">
                     <input name="redirectTo" type="hidden" value={redirectTo} />
                     <input name="employeeId" type="hidden" value={employee.id} />

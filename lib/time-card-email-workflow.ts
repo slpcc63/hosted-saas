@@ -25,6 +25,9 @@ export type TimeCardEmployeeContact = {
   email: string | null;
   id: string;
   lastSyncedAt: Date;
+  phone: string | null;
+  smsConsentAt: Date | null;
+  smsConsentStatus: "not_opted_in" | "opted_in" | "opted_out";
   squareTeamMemberId: string;
   timezone: string;
   updatedAt: Date;
@@ -94,6 +97,8 @@ export type PublicTimeCardConfirmationRequest = Pick<
   | "tokenExpiresAt"
 > & {
   companyName: string;
+  maskedPhone: string | null;
+  smsConsentAt: Date | null;
 };
 
 export type TimeCardConfirmationAuditEvent = {
@@ -137,6 +142,27 @@ function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+function normalizeUsPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+  const nationalNumber = digits.length === 11 && digits.startsWith("1")
+    ? digits.slice(1)
+    : digits;
+
+  if (nationalNumber.length !== 10) {
+    throw new Error("Enter a valid 10-digit US mobile number");
+  }
+
+  return `+1${nationalNumber}`;
+}
+
+function maskPhone(value: unknown) {
+  if (typeof value !== "string" || value.length < 4) {
+    return null;
+  }
+
+  return `••• ••• ${value.slice(-4)}`;
+}
+
 function normalizeTimezone(value: string) {
   const candidate = value.trim() || defaultTimezone;
 
@@ -167,6 +193,12 @@ function mapEmployee(row: Record<string, unknown>): TimeCardEmployeeContact {
     squareTeamMemberId: String(row.square_team_member_id),
     displayName: String(row.display_name),
     email: typeof row.email === "string" && row.email ? row.email : null,
+    phone: typeof row.phone === "string" && row.phone ? row.phone : null,
+    smsConsentAt: row.sms_consent_at ? new Date(String(row.sms_consent_at)) : null,
+    smsConsentStatus:
+      row.sms_consent_status === "opted_in" || row.sms_consent_status === "opted_out"
+        ? row.sms_consent_status
+        : "not_opted_in",
     timezone: String(row.timezone),
     active: Boolean(row.active),
     lastSyncedAt: new Date(String(row.last_synced_at)),
@@ -224,6 +256,12 @@ export async function ensureTimeCardEmailWorkflowTables() {
         square_team_member_id text not null,
         display_name text not null,
         email text,
+        phone text,
+        sms_consent_status text not null default 'not_opted_in'
+          check (sms_consent_status in ('not_opted_in', 'opted_in', 'opted_out')),
+        sms_consent_at timestamptz,
+        sms_opted_out_at timestamptz,
+        sms_consent_source text,
         timezone text not null default '${defaultTimezone}',
         active boolean not null default true,
         last_synced_at timestamptz not null default now(),
@@ -306,6 +344,16 @@ export async function ensureTimeCardEmailWorkflowTables() {
 
       alter table public.time_card_confirmation_requests
         add column if not exists reminder_count integer not null default 0;
+      alter table public.time_card_employee_contacts
+        add column if not exists phone text;
+      alter table public.time_card_employee_contacts
+        add column if not exists sms_consent_status text not null default 'not_opted_in';
+      alter table public.time_card_employee_contacts
+        add column if not exists sms_consent_at timestamptz;
+      alter table public.time_card_employee_contacts
+        add column if not exists sms_opted_out_at timestamptz;
+      alter table public.time_card_employee_contacts
+        add column if not exists sms_consent_source text;
       alter table public.time_card_confirmation_requests
         add column if not exists last_reminder_at timestamptz;
       alter table public.time_card_confirmation_settings
@@ -383,7 +431,8 @@ export async function syncTimeCardEmployeesFromSquare(customerId: string) {
 export async function getTimeCardEmployeeContacts(customerId: string) {
   await ensureTimeCardEmailWorkflowTables();
   const result = await db.query(
-    `select id, customer_id, square_team_member_id, display_name, email, timezone,
+    `select id, customer_id, square_team_member_id, display_name, email, phone,
+            sms_consent_status, sms_consent_at, timezone,
             active, last_synced_at, created_at, updated_at
      from public.time_card_employee_contacts
      where customer_id = $1
@@ -505,7 +554,8 @@ export async function updateTimeCardEmployeeContact(input: {
          timezone = $4,
          updated_at = now()
      where id = $1 and customer_id = $2
-     returning id, customer_id, square_team_member_id, display_name, email, timezone,
+     returning id, customer_id, square_team_member_id, display_name, email, phone,
+               sms_consent_status, sms_consent_at, timezone,
                active, last_synced_at, created_at, updated_at`,
     [input.employeeId, input.customerId, email || null, normalizeTimezone(input.timezone)]
   );
@@ -908,9 +958,11 @@ export async function getPublicTimeCardConfirmationRequest(token: string) {
             requests.sent_at, requests.responded_at, requests.reviewed_at,
             requests.approved_at, requests.reviewed_by_user_id,
             requests.token_expires_at, requests.created_at, requests.updated_at,
-            customers.company_name, customers.contact_name
+            customers.company_name, customers.contact_name,
+            contacts.phone, contacts.sms_consent_at
      from public.time_card_confirmation_requests requests
      inner join public.customer_profiles customers on customers.id = requests.customer_id
+     inner join public.time_card_employee_contacts contacts on contacts.id = requests.employee_id
      where requests.response_token_hash = $1
      limit 1`,
     [hashResponseToken(token)]
@@ -926,6 +978,10 @@ export async function getPublicTimeCardConfirmationRequest(token: string) {
       (typeof result.rows[0].company_name === "string" && result.rows[0].company_name.trim()) ||
       (typeof result.rows[0].contact_name === "string" && result.rows[0].contact_name.trim()) ||
       "Your employer",
+    maskedPhone: maskPhone(result.rows[0].phone),
+    smsConsentAt: result.rows[0].sms_consent_at
+      ? new Date(String(result.rows[0].sms_consent_at))
+      : null,
     employeeName: request.employeeName,
     periodEnd: request.periodEnd,
     periodStart: request.periodStart,
@@ -938,6 +994,75 @@ export async function getPublicTimeCardConfirmationRequest(token: string) {
     timezone: request.timezone,
     tokenExpiresAt: request.tokenExpiresAt
   } satisfies PublicTimeCardConfirmationRequest;
+}
+
+export async function saveTimeCardEmployeeSmsConsent(input: {
+  consent: boolean;
+  phone: string;
+  token: string;
+}) {
+  await ensureTimeCardEmailWorkflowTables();
+
+  if (!input.consent) {
+    throw new Error("SMS consent is required");
+  }
+
+  if (!input.token || input.token.length > 200) {
+    throw new Error("This response link is invalid");
+  }
+
+  const phone = normalizeUsPhone(input.phone);
+  const client = await db.connect();
+
+  try {
+    await client.query("begin");
+    const result = await client.query(
+      `select requests.id, requests.customer_id, requests.employee_id,
+              requests.employee_name, requests.token_expires_at
+       from public.time_card_confirmation_requests requests
+       where requests.response_token_hash = $1
+       for update`,
+      [hashResponseToken(input.token)]
+    );
+    const request = result.rows[0];
+
+    if (!request) {
+      throw new Error("This response link is invalid");
+    }
+
+    if (new Date(String(request.token_expires_at)).getTime() <= Date.now()) {
+      throw new Error("This response link has expired");
+    }
+
+    await client.query(
+      `update public.time_card_employee_contacts
+       set phone = $2,
+           sms_consent_status = 'opted_in',
+           sms_consent_at = now(),
+           sms_opted_out_at = null,
+           sms_consent_source = 'secure_time_confirmation',
+           updated_at = now()
+       where id = $1`,
+      [request.employee_id, phone]
+    );
+    await client.query(
+      `insert into public.time_card_confirmation_audit_events (
+        request_id, customer_id, event_type, actor_type, actor_identifier, details
+      ) values ($1, $2, 'employee_sms_opted_in', 'employee', $3, $4::jsonb)`,
+      [
+        request.id,
+        request.customer_id,
+        request.employee_name,
+        JSON.stringify({ phoneLastFour: phone.slice(-4), source: "secure_time_confirmation" })
+      ]
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
 }
 
 export async function submitTimeCardEmployeeResponse(input: {

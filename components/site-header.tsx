@@ -28,6 +28,8 @@ export async function SiteHeader({ appMode = false }: SiteHeaderProps) {
                 <a href={routing.appHost ? "/time-card-manager" : "/app/time-card-manager"}>Time Card Manager</a>
                 <a href={routing.appHost ? "/subscriptions" : "/app/subscriptions"}>Subscriptions</a>
                 <a href={routing.appHost ? "/account" : "/app/account"}>Account</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
                 {admin ? (
                   <a href={routing.appHost ? "/admin/products" : "/app/admin/products"}>Admin Products</a>
                 ) : null}
@@ -37,6 +39,8 @@ export async function SiteHeader({ appMode = false }: SiteHeaderProps) {
               <>
                 <a href="#products">Products</a>
                 <a href="#filters">Filters</a>
+                <a href="/privacy">Privacy</a>
+                <a href="/terms">Terms</a>
                 <a href={routing.launchProductHref}>App</a>
                 <a className="pill primary" href={routing.launchProductHref}>
                   Launch Product
