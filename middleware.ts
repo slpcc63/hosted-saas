@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 const appSubdomain = process.env.APP_SUBDOMAIN ?? "app";
 const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "slpcc63.com";
+const publicAppPaths = new Set([
+  "/privacy",
+  "/terms",
+  "/time-card-manager/sms-consent"
+]);
 
 function getHostname(request: NextRequest) {
   return request.headers.get("host")?.split(":")[0] ?? "";
@@ -28,6 +33,10 @@ export function middleware(request: NextRequest) {
   }
 
   if (!isAppHostname(hostname)) {
+    return NextResponse.next();
+  }
+
+  if (publicAppPaths.has(pathname)) {
     return NextResponse.next();
   }
 
