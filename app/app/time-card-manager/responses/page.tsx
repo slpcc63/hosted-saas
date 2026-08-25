@@ -13,6 +13,7 @@ import { getPublicRouting } from "@/lib/request-routing";
 import { isTimeCardManagerAutomationLive } from "@/lib/square-time-card-manager";
 import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
 import { buildDefaultManualConfirmationPeriod } from "@/lib/time-card-confirmation-schedule";
+import { isTimeCardSmsLive } from "@/lib/twilio";
 import {
   getTimeCardConfirmationAuditEvents,
   getTimeCardConfirmationRuns,
@@ -79,6 +80,7 @@ export default async function ManagerResponsesPage({
     searchParams
   ]);
   const automationLive = isTimeCardManagerAutomationLive();
+  const smsLive = isTimeCardSmsLive();
   const now = new Date();
   const defaultPeriod = buildDefaultManualConfirmationPeriod(now, confirmationSettings.timezone);
   const filters = {
@@ -111,7 +113,7 @@ export default async function ManagerResponsesPage({
         <div className="section-heading">
           <div>
             <h1>Employee confirmations</h1>
-            <p>Manage employee email contacts, send requests, and review every response.</p>
+            <p>Manage employee contacts, send requests, and review email, form, and text responses.</p>
           </div>
           <a className="pill" href={timeCardPath}>Back to alerts</a>
         </div>
@@ -123,7 +125,7 @@ export default async function ManagerResponsesPage({
           <p className="form-success">Employee email settings saved.</p>
         ) : null}
         {query?.saved === "confirmation_sent" ? (
-          <p className="form-success">Confirmation request sent by email.</p>
+          <p className="form-success">Confirmation request sent. Opted-in employees also receive a text when SMS is live.</p>
         ) : null}
         {query?.saved === "confirmation_resent" ? (
           <p className="form-success">A new secure response link was emailed to the employee.</p>
@@ -457,7 +459,7 @@ export default async function ManagerResponsesPage({
               <div className="workflow-disclosure-content">
             <div className="subcard-header">
               <div>
-                <h2>Weekly email schedule</h2>
+                <h2>Weekly confirmation schedule</h2>
                 <p>Automatically request confirmation for the completed period ending yesterday.</p>
               </div>
               <span className="status-chip">
@@ -578,21 +580,21 @@ export default async function ManagerResponsesPage({
             <details className="dashboard-card workflow-disclosure operations-disclosure">
               <summary>
                 <span>
-                  <strong>Employee email roster</strong>
+                  <strong>Employee contact roster</strong>
                   <small>{employees.filter((employee) => employee.active).length} active · {emailReadyCount} email-ready</small>
                 </span>
               </summary>
               <div className="workflow-disclosure-content">
             <div className="section-heading">
               <div>
-                <h2>Employee email roster</h2>
-                <p>Sync names from Square, then add the email used for confirmations.</p>
+                <h2>Employee contact roster</h2>
+                <p>Sync names from Square, then add email. Employees enroll their own mobile number through the secure form.</p>
               </div>
             </div>
             <div className="subcard-header">
               <div>
                 <h2>Square employees</h2>
-                <p>Only active employees with saved email addresses receive scheduled requests.</p>
+                <p>Email is always used. Consented employees also receive texts after carrier approval.</p>
               </div>
               <span className="status-chip">{employees.filter((employee) => employee.active).length} active</span>
             </div>
@@ -653,8 +655,8 @@ export default async function ManagerResponsesPage({
                       {subscription ? (
                         <ConfirmFormSubmit
                           action="send_confirmation"
-                          buttonLabel="Send confirmation email"
-                          confirmLabel="Send email now"
+                          buttonLabel={smsLive && employee.smsConsentStatus === "opted_in" ? "Send email + text" : "Send confirmation email"}
+                          confirmLabel={smsLive && employee.smsConsentStatus === "opted_in" ? "Send email + text now" : "Send email now"}
                           employeeEmail={employee.email}
                           employeeName={employee.displayName}
                           periodEnd={defaultPeriod.periodEnd}

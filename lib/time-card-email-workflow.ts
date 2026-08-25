@@ -9,6 +9,11 @@ import { getValidSquareConnectionByCustomerId } from "@/lib/square-connections";
 import { hasSquareScopes, searchSquareTeamMembers } from "@/lib/square";
 import { parseEmployeeTimeResponse } from "@/lib/time-card-response-parser";
 import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
+import { isTimeCardSmsLive, sendTwilioMessage } from "@/lib/twilio";
+import {
+  buildTimeCardConfirmationSmsBody,
+  classifySmsKeyword
+} from "@/lib/twilio-webhook";
 import {
   buildCompletedConfirmationPeriod,
   isWeeklyConfirmationScheduleDue
@@ -342,6 +347,24 @@ export async function ensureTimeCardEmailWorkflowTables() {
         unique (customer_id, period_start, period_end)
       );
 
+      create table if not exists public.time_card_sms_messages (
+        id uuid primary key default gen_random_uuid(),
+        customer_id uuid references public.customer_profiles(id) on delete cascade,
+        employee_id uuid references public.time_card_employee_contacts(id) on delete set null,
+        request_id uuid references public.time_card_confirmation_requests(id) on delete set null,
+        twilio_message_sid text not null unique,
+        direction text not null check (direction in ('inbound', 'outbound')),
+        from_phone text,
+        to_phone text,
+        body text not null default '',
+        status text not null,
+        processing_result text,
+        error_code text,
+        error_message text,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now()
+      );
+
       alter table public.time_card_confirmation_requests
         add column if not exists reminder_count integer not null default 0;
       alter table public.time_card_employee_contacts
@@ -375,6 +398,11 @@ export async function ensureTimeCardEmailWorkflowTables() {
         on public.time_card_confirmation_audit_events(request_id, created_at);
       create index if not exists time_card_confirmation_runs_customer_idx
         on public.time_card_confirmation_runs(customer_id, created_at desc);
+      create index if not exists time_card_sms_request_idx
+        on public.time_card_sms_messages(request_id, created_at desc);
+      create index if not exists time_card_sms_employee_idx
+        on public.time_card_sms_messages(employee_id, created_at desc);
+      alter table public.time_card_sms_messages enable row level security;
     `).then(() => undefined);
   }
 
@@ -644,6 +672,73 @@ export async function getTimeCardConfirmationRuns(customerId: string, limit = 12
   } satisfies TimeCardConfirmationRun));
 }
 
+async function sendTimeCardConfirmationSms(input: {
+  companyName: string;
+  customerId: string;
+  employeeId: string;
+  reminder?: boolean;
+  requestId: string;
+  responseUrl: string;
+  to: string;
+}) {
+  const messageBody = buildTimeCardConfirmationSmsBody({
+    companyName: input.companyName,
+    reminder: input.reminder,
+    responseUrl: input.responseUrl
+  });
+
+  try {
+    const result = await sendTwilioMessage({
+      body: messageBody,
+      statusCallback: `${getAppOrigin()}/api/webhooks/twilio/status`,
+      to: input.to
+    });
+
+    await db.query(
+      `insert into public.time_card_sms_messages (
+        customer_id, employee_id, request_id, twilio_message_sid,
+        direction, to_phone, body, status, processing_result
+      ) values ($1, $2, $3, $4, 'outbound', $5, $6, $7, 'submitted')
+      on conflict (twilio_message_sid) do nothing`,
+      [
+        input.customerId,
+        input.employeeId,
+        input.requestId,
+        result.sid,
+        input.to,
+        input.reminder ? "Time confirmation reminder" : "Time confirmation request",
+        result.status
+      ]
+    );
+    await db.query(
+      `insert into public.time_card_confirmation_audit_events (
+        request_id, customer_id, event_type, actor_type, actor_identifier, details
+      ) values ($1, $2, $3, 'system', $4, $5::jsonb)`,
+      [
+        input.requestId,
+        input.customerId,
+        input.reminder ? "sms_resent" : "sms_sent",
+        `phone_ending_${input.to.slice(-4)}`,
+        JSON.stringify({ messageSid: result.sid, status: result.status })
+      ]
+    );
+  } catch (error) {
+    await db.query(
+      `insert into public.time_card_confirmation_audit_events (
+        request_id, customer_id, event_type, actor_type, details
+      ) values ($1, $2, 'sms_failed', 'system', $3::jsonb)`,
+      [
+        input.requestId,
+        input.customerId,
+        JSON.stringify({
+          message: error instanceof Error ? error.message : "SMS delivery failed",
+          reminder: Boolean(input.reminder)
+        })
+      ]
+    );
+  }
+}
+
 export async function createAndSendTimeCardConfirmationRequest(input: {
   actorType?: "manager" | "system";
   customerId: string;
@@ -664,6 +759,7 @@ export async function createAndSendTimeCardConfirmationRequest(input: {
   const employeeResult = await db.query(
     `select contacts.id, contacts.customer_id, contacts.square_team_member_id,
             contacts.display_name, contacts.email, contacts.timezone,
+            contacts.phone, contacts.sms_consent_status,
             customers.company_name, customers.contact_name
      from public.time_card_employee_contacts contacts
      inner join public.customer_profiles customers on customers.id = contacts.customer_id
@@ -811,6 +907,22 @@ export async function createAndSendTimeCardConfirmationRequest(input: {
     throw error;
   }
 
+  if (
+    isTimeCardSmsLive() &&
+    employee.sms_consent_status === "opted_in" &&
+    typeof employee.phone === "string" &&
+    employee.phone
+  ) {
+    await sendTimeCardConfirmationSms({
+      companyName,
+      customerId: input.customerId,
+      employeeId: input.employeeId,
+      requestId,
+      responseUrl,
+      to: employee.phone
+    });
+  }
+
   return requestId;
 }
 
@@ -822,11 +934,14 @@ export async function resendTimeCardConfirmationRequest(input: {
   await ensureTimeCardEmailWorkflowTables();
   const result = await db.query(
     `select requests.id, requests.customer_id, requests.employee_name,
-            requests.employee_email, requests.period_start, requests.period_end,
+            requests.employee_id, requests.employee_email,
+            requests.period_start, requests.period_end,
             requests.status, requests.reminder_count, requests.response_token_hash,
+            contacts.phone, contacts.sms_consent_status,
             customers.company_name, customers.contact_name
      from public.time_card_confirmation_requests requests
      inner join public.customer_profiles customers on customers.id = requests.customer_id
+     inner join public.time_card_employee_contacts contacts on contacts.id = requests.employee_id
      where requests.id = $1 and requests.customer_id = $2
        and requests.status in ('pending', 'delivery_failed')
      limit 1`,
@@ -929,6 +1044,23 @@ export async function resendTimeCardConfirmationRequest(input: {
       [input.requestId, input.customerId, JSON.stringify({ message })]
     );
     throw error;
+  }
+
+  if (
+    isTimeCardSmsLive() &&
+    request.sms_consent_status === "opted_in" &&
+    typeof request.phone === "string" &&
+    request.phone
+  ) {
+    await sendTimeCardConfirmationSms({
+      companyName,
+      customerId: input.customerId,
+      employeeId: String(request.employee_id),
+      reminder: true,
+      requestId: input.requestId,
+      responseUrl,
+      to: request.phone
+    });
   }
 }
 
@@ -1192,6 +1324,264 @@ export async function submitTimeCardEmployeeResponse(input: {
       requestId
     });
   }
+}
+
+export type InboundTimeCardSmsResult = {
+  kind:
+    | "accepted"
+    | "duplicate"
+    | "help"
+    | "invalid_response"
+    | "no_open_request"
+    | "not_opted_in"
+    | "start"
+    | "stop";
+};
+
+export async function processInboundTimeCardSms(input: {
+  body: string;
+  from: string;
+  messageSid: string;
+  optOutType?: string;
+  to: string;
+}): Promise<InboundTimeCardSmsResult> {
+  await ensureTimeCardEmailWorkflowTables();
+
+  if (!input.messageSid || !input.from) {
+    return { kind: "invalid_response" };
+  }
+
+  let fromPhone: string;
+
+  try {
+    fromPhone = normalizeUsPhone(input.from);
+  } catch {
+    return { kind: "invalid_response" };
+  }
+
+  const insertResult = await db.query(
+    `insert into public.time_card_sms_messages (
+      twilio_message_sid, direction, from_phone, to_phone, body, status
+    ) values ($1, 'inbound', $2, $3, $4, 'received')
+    on conflict (twilio_message_sid) do nothing
+    returning id`,
+    [input.messageSid, fromPhone, input.to || null, input.body]
+  );
+
+  if (!insertResult.rows[0]) {
+    return { kind: "duplicate" };
+  }
+
+  const keyword = classifySmsKeyword(input.body, input.optOutType);
+
+  if (keyword === "stop" || keyword === "start") {
+    const optedIn = keyword === "start";
+    const contactResult = await db.query(
+      `update public.time_card_employee_contacts
+       set sms_consent_status = $2,
+           sms_opted_out_at = case when $2 = 'opted_out' then now() else null end,
+           updated_at = now()
+       where phone = $1
+         and ($2 = 'opted_out' or sms_consent_at is not null)
+       returning id, customer_id`,
+      [fromPhone, optedIn ? "opted_in" : "opted_out"]
+    );
+    const contact = contactResult.rows[0];
+
+    await db.query(
+      `update public.time_card_sms_messages
+       set customer_id = $2, employee_id = $3, status = 'processed',
+           processing_result = $4, updated_at = now()
+       where twilio_message_sid = $1`,
+      [
+        input.messageSid,
+        contact?.customer_id ?? null,
+        contact?.id ?? null,
+        keyword
+      ]
+    );
+
+    return { kind: keyword };
+  }
+
+  if (keyword === "help") {
+    await db.query(
+      `update public.time_card_sms_messages
+       set status = 'processed', processing_result = 'help', updated_at = now()
+       where twilio_message_sid = $1`,
+      [input.messageSid]
+    );
+    return { kind: "help" };
+  }
+
+  const contactResult = await db.query(
+    `select id, customer_id, display_name, sms_consent_status
+     from public.time_card_employee_contacts
+     where phone = $1 and active = true
+     order by updated_at desc
+     limit 1`,
+    [fromPhone]
+  );
+  const contact = contactResult.rows[0];
+
+  if (!contact || contact.sms_consent_status !== "opted_in") {
+    await db.query(
+      `update public.time_card_sms_messages
+       set customer_id = $2, employee_id = $3, status = 'processed',
+           processing_result = 'not_opted_in', updated_at = now()
+       where twilio_message_sid = $1`,
+      [input.messageSid, contact?.customer_id ?? null, contact?.id ?? null]
+    );
+    return { kind: "not_opted_in" };
+  }
+
+  const parsed = parseEmployeeTimeResponse(input.body);
+
+  if (!parsed) {
+    await db.query(
+      `update public.time_card_sms_messages
+       set customer_id = $2, employee_id = $3, status = 'processed',
+           processing_result = 'invalid_response', updated_at = now()
+       where twilio_message_sid = $1`,
+      [input.messageSid, contact.customer_id, contact.id]
+    );
+    return { kind: "invalid_response" };
+  }
+
+  const client = await db.connect();
+  let managerEmail = "";
+  let companyName = "Your team";
+  let employeeName = String(contact.display_name);
+  let requestId = "";
+
+  try {
+    await client.query("begin");
+    const requestResult = await client.query(
+      `select requests.id, requests.customer_id, requests.employee_name,
+              customers.email as manager_email, customers.company_name,
+              customers.contact_name
+       from public.time_card_confirmation_requests requests
+       inner join public.customer_profiles customers on customers.id = requests.customer_id
+       where requests.employee_id = $1 and requests.customer_id = $2
+         and requests.status = 'pending' and requests.token_expires_at > now()
+       order by requests.created_at desc
+       limit 1
+       for update of requests`,
+      [contact.id, contact.customer_id]
+    );
+    const request = requestResult.rows[0];
+
+    if (!request) {
+      await client.query(
+        `update public.time_card_sms_messages
+         set customer_id = $2, employee_id = $3, status = 'processed',
+             processing_result = 'no_open_request', updated_at = now()
+         where twilio_message_sid = $1`,
+        [input.messageSid, contact.customer_id, contact.id]
+      );
+      await client.query("commit");
+      return { kind: "no_open_request" };
+    }
+
+    requestId = String(request.id);
+    managerEmail = String(request.manager_email ?? "");
+    employeeName = String(request.employee_name);
+    companyName =
+      (typeof request.company_name === "string" && request.company_name.trim()) ||
+      (typeof request.contact_name === "string" && request.contact_name.trim()) ||
+      "Your team";
+
+    await client.query(
+      `update public.time_card_confirmation_requests
+       set status = 'responded', response_code = $2,
+           reported_shift_date = null, reported_time_in = $3,
+           reported_time_out = $4, response_note = 'Submitted by SMS',
+           responded_at = now(), updated_at = now()
+       where id = $1`,
+      [
+        requestId,
+        parsed.code,
+        parsed.code === "b" ? parsed.timeIn : null,
+        parsed.code === "b" ? parsed.timeOut : null
+      ]
+    );
+    await client.query(
+      `insert into public.time_card_confirmation_audit_events (
+        request_id, customer_id, event_type, actor_type, actor_identifier, details
+      ) values ($1, $2, 'employee_responded_sms', 'employee', $3, $4::jsonb)`,
+      [
+        requestId,
+        request.customer_id,
+        employeeName,
+        JSON.stringify({
+          messageSid: input.messageSid,
+          responseCode: parsed.code,
+          timeIn: parsed.code === "b" ? parsed.timeIn : null,
+          timeOut: parsed.code === "b" ? parsed.timeOut : null
+        })
+      ]
+    );
+    await client.query(
+      `update public.time_card_sms_messages
+       set customer_id = $2, employee_id = $3, request_id = $4,
+           status = 'processed', processing_result = 'accepted', updated_at = now()
+       where twilio_message_sid = $1`,
+      [input.messageSid, contact.customer_id, contact.id, requestId]
+    );
+    await client.query("commit");
+  } catch (error) {
+    await client.query("rollback");
+    throw error;
+  } finally {
+    client.release();
+  }
+
+  try {
+    await sendTransactionalEmail({
+      to: managerEmail,
+      subject: `${companyName}: ${employeeName} submitted a time confirmation by text`,
+      html: `
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2933;">
+          <h1>Text confirmation received</h1>
+          <p><strong>${escapeHtml(employeeName)}</strong> submitted response <strong>${parsed.code.toUpperCase()}</strong> by text.</p>
+          <p><a href="${escapeHtml(`${getAppOrigin()}/app/time-card-manager/responses`)}">Open the manager review inbox</a></p>
+        </div>
+      `,
+      text: `${employeeName} submitted response ${parsed.code.toUpperCase()} by text. Review it at ${getAppOrigin()}/app/time-card-manager/responses`
+    });
+  } catch (error) {
+    console.error("[time-card-confirmation] SMS manager notification failed", {
+      error: error instanceof Error ? error.message : String(error),
+      requestId
+    });
+  }
+
+  return { kind: "accepted" };
+}
+
+export async function updateTimeCardSmsDeliveryStatus(input: {
+  errorCode: string;
+  errorMessage: string;
+  messageSid: string;
+  status: string;
+}) {
+  await ensureTimeCardEmailWorkflowTables();
+
+  if (!input.messageSid) {
+    return;
+  }
+
+  await db.query(
+    `update public.time_card_sms_messages
+     set status = $2, error_code = $3, error_message = $4, updated_at = now()
+     where twilio_message_sid = $1`,
+    [
+      input.messageSid,
+      input.status || "unknown",
+      input.errorCode || null,
+      input.errorMessage || null
+    ]
+  );
 }
 
 export async function reviewTimeCardConfirmationRequest(input: {

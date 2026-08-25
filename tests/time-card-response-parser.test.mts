@@ -3,6 +3,12 @@ import test from "node:test";
 
 import { parseEmployeeTimeResponse } from "../lib/time-card-response-parser.ts";
 import {
+  buildTimeCardConfirmationSmsBody,
+  classifySmsKeyword,
+  computeTwilioSignature,
+  validateTwilioSignature
+} from "../lib/twilio-webhook.ts";
+import {
   buildCompletedConfirmationPeriod,
   buildDefaultManualConfirmationPeriod,
   isWeeklyConfirmationScheduleDue
@@ -81,6 +87,46 @@ test("rejects incomplete and invalid responses", () => {
   assert.equal(parseEmployeeTimeResponse("b"), null);
   assert.equal(parseEmployeeTimeResponse("b + 25:00 - 17:00"), null);
   assert.equal(parseEmployeeTimeResponse("c + 09:00 - 17:00"), null);
+});
+
+test("validates Twilio webhook signatures and rejects modified payloads", () => {
+  const input = {
+    authToken: "test-auth-token",
+    parameters: {
+      Body: "b + 9am - 5pm",
+      From: "+15725550123",
+      MessageSid: "SM-test"
+    },
+    url: "https://app.slpcc63.com/api/webhooks/twilio/sms"
+  };
+  const signature = computeTwilioSignature(input);
+
+  assert.equal(validateTwilioSignature({ ...input, signature }), true);
+  assert.equal(validateTwilioSignature({
+    ...input,
+    parameters: { ...input.parameters, Body: "a" },
+    signature
+  }), false);
+});
+
+test("recognizes Twilio opt-out, restart, and help keywords", () => {
+  assert.equal(classifySmsKeyword("unsubscribe"), "stop");
+  assert.equal(classifySmsKeyword("anything", "STOP"), "stop");
+  assert.equal(classifySmsKeyword("start"), "start");
+  assert.equal(classifySmsKeyword("help"), "help");
+  assert.equal(classifySmsKeyword("a"), null);
+});
+
+test("builds a minimized SMS without confirmation-period dates", () => {
+  const message = buildTimeCardConfirmationSmsBody({
+    companyName: "SLPCC63",
+    responseUrl: "https://app.slpcc63.com/app/time-card-response/private-token"
+  });
+
+  assert.match(message, /Reply A/);
+  assert.match(message, /private-token/);
+  assert.match(message, /Reply STOP/);
+  assert.doesNotMatch(message, /2026-\d{2}-\d{2}/);
 });
 
 test("detects a weekly schedule only inside its delivery window", () => {
