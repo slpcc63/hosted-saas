@@ -131,7 +131,7 @@ export default async function ManagerResponsesPage({
           <p className="form-success">A new secure response link was emailed to the employee.</p>
         ) : null}
         {query?.saved === "confirmation_settings" ? (
-          <p className="form-success">Weekly confirmation schedule saved.</p>
+          <p className="form-success">Missing-punch notifications and weekly review settings saved.</p>
         ) : null}
         {query?.saved === "approved" ? (
           <p className="form-success">Response approved and added to the audit record.</p>
@@ -442,7 +442,7 @@ export default async function ManagerResponsesPage({
             <details className="dashboard-card workflow-disclosure operations-disclosure">
               <summary>
                 <span>
-                  <strong>Weekly automation</strong>
+                  <strong>Missing-punch automation</strong>
                   <small>
                     {weekdayOptions[confirmationSettings.sendDayOfWeek]} at {formatScheduleTime(confirmationSettings.sendTimeLocal)}
                     {` · manager summary ${formatScheduleTime(confirmationSettings.managerReminderTimeLocal)} · ${emailReadyCount} email-ready`}
@@ -459,8 +459,8 @@ export default async function ManagerResponsesPage({
               <div className="workflow-disclosure-content">
             <div className="subcard-header">
               <div>
-                <h2>Weekly confirmation schedule</h2>
-                <p>Automatically request confirmation for the completed period ending yesterday.</p>
+                <h2>Notification and review schedule</h2>
+                <p>Notify employees about a missed punch the same day, then send one Sunday secure-form digest for anything unresolved.</p>
               </div>
               <span className="status-chip">
                 {!subscription
@@ -479,11 +479,24 @@ export default async function ManagerResponsesPage({
                   name="automationEnabled"
                   type="checkbox"
                 />
-                <span>Send employee confirmations automatically</span>
+                <span>Run missing-punch notifications automatically</span>
+              </label>
+              <label className="checkbox-row">
+                <input
+                  defaultChecked={confirmationSettings.sameDayEnabled}
+                  disabled={!automationLive || !subscription}
+                  name="sameDayEnabled"
+                  type="checkbox"
+                />
+                <span>Send a shift-specific notice after a punch is missing</span>
+              </label>
+              <label className="field">
+                <span>Wait this many minutes after scheduled start or end</span>
+                <input disabled={!subscription} defaultValue={confirmationSettings.graceMinutes} max="240" min="0" name="graceMinutes" type="number" />
               </label>
               <div className="form-grid-two">
                 <label className="field">
-                  <span>Send day</span>
+                  <span>Weekly digest day</span>
                   <select disabled={!subscription} defaultValue={confirmationSettings.sendDayOfWeek} name="sendDayOfWeek">
                     {weekdayOptions.map((day, index) => (
                       <option key={day} value={index}>{day}</option>
@@ -491,7 +504,7 @@ export default async function ManagerResponsesPage({
                   </select>
                 </label>
                 <label className="field">
-                  <span>Send time</span>
+                  <span>Weekly digest time</span>
                   <input disabled={!subscription} defaultValue={confirmationSettings.sendTimeLocal} name="sendTimeLocal" type="time" />
                 </label>
               </div>
@@ -505,9 +518,19 @@ export default async function ManagerResponsesPage({
                 </select>
               </label>
               <label className="field">
-                <span>Days in each confirmation period</span>
+                <span>Days included in each weekly digest</span>
                 <input disabled={!subscription} defaultValue={confirmationSettings.periodDays} max="31" min="1" name="periodDays" type="number" />
               </label>
+              <label className="field">
+                <span>Worked-response handling</span>
+                <select disabled={!subscription} defaultValue={confirmationSettings.workedResponseHandling} name="workedResponseHandling">
+                  <option value="require_approval">Require manager approval</option>
+                  <option value="automatic">Automatically update Square when safe</option>
+                </select>
+              </label>
+              <p className="auth-helper">
+                Automatic updates stop for manager review if the shift is ambiguous, unusual, changed in Square, or rejected by Square.
+              </p>
               <label className="checkbox-row">
                 <input
                   defaultChecked={confirmationSettings.managerReminderEnabled}
@@ -533,14 +556,14 @@ export default async function ManagerResponsesPage({
                 <p className="auth-helper">Activate a subscription before weekly sending can be enabled.</p>
               ) : null}
               {!automationLive ? (
-                <p className="auth-helper">Weekly automation is temporarily unavailable.</p>
+                <p className="auth-helper">Missing-punch automation is temporarily unavailable.</p>
               ) : null}
               {subscription ? (
                 <ConfirmFormSubmit
                   action="save_schedule"
                   buttonClassName="pill pill-button"
-                  buttonLabel="Save weekly schedule"
-                  confirmLabel="Enable weekly emails"
+                  buttonLabel="Save automation settings"
+                  confirmLabel="Save these settings"
                   employeeCount={emailReadyCount}
                 />
               ) : (

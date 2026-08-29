@@ -55,6 +55,8 @@ export type TimeCardConfirmationRequest = {
   id: string;
   managerNote: string | null;
   lastReminderAt: Date | null;
+  missingPunchId: string | null;
+  missingPunchKind: "missing_clock_in" | "missing_clock_out" | null;
   periodEnd: string;
   periodStart: string;
   reportedShiftDate: string | null;
@@ -64,9 +66,13 @@ export type TimeCardConfirmationRequest = {
   responseCode: "a" | "b" | null;
   responseNote: string | null;
   reminderCount: number;
+  requestKind: "legacy_period" | "missing_punch";
   reviewedAt: Date | null;
   reviewedByUserId: string | null;
   sentAt: Date | null;
+  scheduledEndAt: Date | null;
+  scheduledShiftId: string | null;
+  scheduledStartAt: Date | null;
   squareTeamMemberId: string;
   status: TimeCardConfirmationStatus;
   timezone: string;
@@ -90,6 +96,7 @@ export type TimeCardConfirmationRun = {
 export type PublicTimeCardConfirmationRequest = Pick<
   TimeCardConfirmationRequest,
   | "employeeName"
+  | "missingPunchKind"
   | "periodEnd"
   | "periodStart"
   | "reportedShiftDate"
@@ -97,6 +104,9 @@ export type PublicTimeCardConfirmationRequest = Pick<
   | "reportedTimeOut"
   | "respondedAt"
   | "responseCode"
+  | "requestKind"
+  | "scheduledEndAt"
+  | "scheduledStartAt"
   | "status"
   | "timezone"
   | "tokenExpiresAt"
@@ -120,12 +130,15 @@ export type TimeCardConfirmationAuditEvent = {
 export type TimeCardConfirmationSettings = {
   automationEnabled: boolean;
   customerId: string;
+  graceMinutes: number;
   managerReminderEnabled: boolean;
   managerReminderTimeLocal: string;
   periodDays: number;
   sendDayOfWeek: number;
   sendTimeLocal: string;
+  sameDayEnabled: boolean;
   timezone: string;
+  workedResponseHandling: "require_approval" | "automatic";
 };
 
 let workflowTablesReady: Promise<void> | null = null;
@@ -238,6 +251,15 @@ function mapRequest(row: Record<string, unknown>): TimeCardConfirmationRequest {
     managerNote: typeof row.manager_note === "string" ? row.manager_note : null,
     reminderCount: Number(row.reminder_count ?? 0),
     lastReminderAt: row.last_reminder_at ? new Date(String(row.last_reminder_at)) : null,
+    requestKind: row.request_kind === "missing_punch" ? "missing_punch" : "legacy_period",
+    missingPunchId: typeof row.missing_punch_id === "string" ? row.missing_punch_id : null,
+    missingPunchKind:
+      row.missing_punch_kind === "missing_clock_in" || row.missing_punch_kind === "missing_clock_out"
+        ? row.missing_punch_kind
+        : null,
+    scheduledShiftId: typeof row.scheduled_shift_id === "string" ? row.scheduled_shift_id : null,
+    scheduledStartAt: row.scheduled_start_at ? new Date(String(row.scheduled_start_at)) : null,
+    scheduledEndAt: row.scheduled_end_at ? new Date(String(row.scheduled_end_at)) : null,
     sentAt: row.sent_at ? new Date(String(row.sent_at)) : null,
     respondedAt: row.responded_at ? new Date(String(row.responded_at)) : null,
     reviewedAt: row.reviewed_at ? new Date(String(row.reviewed_at)) : null,
@@ -284,6 +306,10 @@ export async function ensureTimeCardEmailWorkflowTables() {
         manager_reminder_time_local text not null default '15:00',
         timezone text not null default '${defaultTimezone}',
         period_days integer not null default 7 check (period_days between 1 and 31),
+        same_day_enabled boolean not null default true,
+        grace_minutes integer not null default 30 check (grace_minutes between 0 and 240),
+        worked_response_handling text not null default 'require_approval'
+          check (worked_response_handling in ('require_approval', 'automatic')),
         created_at timestamptz not null default now(),
         updated_at timestamptz not null default now()
       );
@@ -319,6 +345,51 @@ export async function ensureTimeCardEmailWorkflowTables() {
         updated_at timestamptz not null default now(),
         check (period_end >= period_start),
         unique (employee_id, period_start, period_end)
+      );
+
+      create table if not exists public.time_card_missing_punches (
+        id uuid primary key default gen_random_uuid(),
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        employee_id uuid not null references public.time_card_employee_contacts(id) on delete restrict,
+        square_team_member_id text not null,
+        scheduled_shift_id text not null,
+        timecard_id text,
+        kind text not null check (kind in ('missing_clock_in', 'missing_clock_out')),
+        location_id text not null,
+        scheduled_start_at timestamptz not null,
+        scheduled_end_at timestamptz not null,
+        timezone text not null,
+        status text not null default 'open'
+          check (status in ('open', 'responded', 'approved', 'rejected', 'applied', 'apply_failed', 'resolved_square')),
+        notified_at timestamptz,
+        resolved_at timestamptz,
+        square_result_timecard_id text,
+        square_error text,
+        first_detected_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        unique (customer_id, scheduled_shift_id)
+      );
+
+      create table if not exists public.time_card_missing_punch_digests (
+        id uuid primary key default gen_random_uuid(),
+        customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        employee_id uuid not null references public.time_card_employee_contacts(id) on delete restrict,
+        period_start date not null,
+        period_end date not null,
+        response_token_hash text not null unique,
+        token_expires_at timestamptz not null,
+        sent_at timestamptz,
+        submitted_at timestamptz,
+        created_at timestamptz not null default now(),
+        updated_at timestamptz not null default now(),
+        unique (employee_id, period_start, period_end)
+      );
+
+      create table if not exists public.time_card_missing_punch_digest_items (
+        digest_id uuid not null references public.time_card_missing_punch_digests(id) on delete cascade,
+        missing_punch_id uuid not null references public.time_card_missing_punches(id) on delete cascade,
+        created_at timestamptz not null default now(),
+        primary key (digest_id, missing_punch_id)
       );
 
       create table if not exists public.time_card_confirmation_audit_events (
@@ -385,6 +456,28 @@ export async function ensureTimeCardEmailWorkflowTables() {
         add column if not exists manager_reminder_time_local text not null default '15:00';
       alter table public.time_card_confirmation_runs
         add column if not exists manager_reminder_sent_at timestamptz;
+      alter table public.time_card_confirmation_settings
+        add column if not exists same_day_enabled boolean not null default true;
+      alter table public.time_card_confirmation_settings
+        add column if not exists grace_minutes integer not null default 30;
+      alter table public.time_card_confirmation_settings
+        add column if not exists worked_response_handling text not null default 'require_approval';
+      alter table public.time_card_confirmation_requests
+        add column if not exists request_kind text not null default 'legacy_period';
+      alter table public.time_card_confirmation_requests
+        add column if not exists missing_punch_id uuid references public.time_card_missing_punches(id) on delete set null;
+      alter table public.time_card_confirmation_requests
+        add column if not exists missing_punch_kind text;
+      alter table public.time_card_confirmation_requests
+        add column if not exists scheduled_shift_id text;
+      alter table public.time_card_confirmation_requests
+        add column if not exists scheduled_start_at timestamptz;
+      alter table public.time_card_confirmation_requests
+        add column if not exists scheduled_end_at timestamptz;
+
+      alter table public.time_card_confirmation_requests
+        drop constraint if exists time_card_confirmation_requests_employee_id_period_start_period_end_key;
+      drop index if exists public.time_card_requests_employee_period_idx;
 
       create index if not exists time_card_contacts_customer_idx
         on public.time_card_employee_contacts(customer_id, active, display_name);
@@ -392,8 +485,16 @@ export async function ensureTimeCardEmailWorkflowTables() {
         on public.time_card_confirmation_requests(customer_id, status, created_at desc);
       create index if not exists time_card_requests_employee_idx
         on public.time_card_confirmation_requests(employee_id, created_at desc);
-      create unique index if not exists time_card_requests_employee_period_idx
-        on public.time_card_confirmation_requests(employee_id, period_start, period_end);
+      create unique index if not exists time_card_requests_legacy_employee_period_idx
+        on public.time_card_confirmation_requests(employee_id, period_start, period_end)
+        where request_kind = 'legacy_period';
+      create unique index if not exists time_card_requests_missing_punch_idx
+        on public.time_card_confirmation_requests(missing_punch_id)
+        where missing_punch_id is not null;
+      create index if not exists time_card_missing_punch_customer_status_idx
+        on public.time_card_missing_punches(customer_id, status, scheduled_start_at desc);
+      create index if not exists time_card_missing_punch_digest_employee_idx
+        on public.time_card_missing_punch_digests(employee_id, created_at desc);
       create index if not exists time_card_audit_request_idx
         on public.time_card_confirmation_audit_events(request_id, created_at);
       create index if not exists time_card_confirmation_runs_customer_idx
@@ -477,6 +578,11 @@ function mapConfirmationSettings(row: Record<string, unknown>): TimeCardConfirma
     automationEnabled: Boolean(row.automation_enabled),
     managerReminderEnabled: Boolean(row.manager_reminder_enabled),
     managerReminderTimeLocal: String(row.manager_reminder_time_local),
+    sameDayEnabled: row.same_day_enabled !== false,
+    graceMinutes: Number(row.grace_minutes ?? 30),
+    workedResponseHandling: row.worked_response_handling === "automatic"
+      ? "automatic"
+      : "require_approval",
     sendDayOfWeek: Number(row.send_day_of_week),
     sendTimeLocal: String(row.send_time_local),
     timezone: String(row.timezone),
@@ -492,7 +598,8 @@ export async function getOrCreateTimeCardConfirmationSettings(customerId: string
      on conflict (customer_id) do update
        set updated_at = public.time_card_confirmation_settings.updated_at
      returning customer_id, automation_enabled, send_day_of_week, send_time_local,
-               manager_reminder_enabled, manager_reminder_time_local, timezone, period_days`,
+               manager_reminder_enabled, manager_reminder_time_local, timezone, period_days,
+               same_day_enabled, grace_minutes, worked_response_handling`,
     [customerId]
   );
 
@@ -505,6 +612,9 @@ export async function upsertTimeCardConfirmationSettings(input: {
   managerReminderEnabled: boolean;
   managerReminderTimeLocal: string;
   periodDays: number;
+  sameDayEnabled?: boolean;
+  graceMinutes?: number;
+  workedResponseHandling?: "require_approval" | "automatic";
   sendDayOfWeek: number;
   sendTimeLocal: string;
   timezone: string;
@@ -519,7 +629,10 @@ export async function upsertTimeCardConfirmationSettings(input: {
     !/^\d{2}:\d{2}$/.test(input.managerReminderTimeLocal) ||
     !Number.isInteger(input.periodDays) ||
     input.periodDays < 1 ||
-    input.periodDays > 31
+    input.periodDays > 31 ||
+    !Number.isInteger(input.graceMinutes ?? 30) ||
+    (input.graceMinutes ?? 30) < 0 ||
+    (input.graceMinutes ?? 30) > 240
   ) {
     throw new Error("Confirmation automation settings are invalid");
   }
@@ -535,8 +648,9 @@ export async function upsertTimeCardConfirmationSettings(input: {
     `insert into public.time_card_confirmation_settings (
       customer_id, automation_enabled, send_day_of_week, send_time_local,
       manager_reminder_enabled, manager_reminder_time_local,
-      timezone, period_days, updated_at
-    ) values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+      timezone, period_days, same_day_enabled, grace_minutes,
+      worked_response_handling, updated_at
+    ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
     on conflict (customer_id) do update set
       automation_enabled = excluded.automation_enabled,
       send_day_of_week = excluded.send_day_of_week,
@@ -545,9 +659,13 @@ export async function upsertTimeCardConfirmationSettings(input: {
       manager_reminder_time_local = excluded.manager_reminder_time_local,
       timezone = excluded.timezone,
       period_days = excluded.period_days,
+      same_day_enabled = excluded.same_day_enabled,
+      grace_minutes = excluded.grace_minutes,
+      worked_response_handling = excluded.worked_response_handling,
       updated_at = now()
     returning customer_id, automation_enabled, send_day_of_week, send_time_local,
-              manager_reminder_enabled, manager_reminder_time_local, timezone, period_days`,
+              manager_reminder_enabled, manager_reminder_time_local, timezone, period_days,
+              same_day_enabled, grace_minutes, worked_response_handling`,
     [
       input.customerId,
       input.automationEnabled,
@@ -556,7 +674,10 @@ export async function upsertTimeCardConfirmationSettings(input: {
       input.managerReminderEnabled,
       input.managerReminderTimeLocal,
       normalizeTimezone(input.timezone),
-      input.periodDays
+      input.periodDays,
+      input.sameDayEnabled ?? true,
+      Math.min(Math.max(input.graceMinutes ?? 30, 0), 240),
+      input.workedResponseHandling ?? "require_approval"
     ]
   );
 
@@ -603,6 +724,8 @@ export async function getTimeCardConfirmationRequests(customerId: string, limit 
             reported_shift_date, reported_time_in, reported_time_out, response_note,
             manager_note, sent_at, responded_at, reviewed_at, approved_at,
             reviewed_by_user_id, reminder_count, last_reminder_at,
+            request_kind, missing_punch_id, missing_punch_kind, scheduled_shift_id,
+            scheduled_start_at, scheduled_end_at,
             token_expires_at, created_at, updated_at
      from public.time_card_confirmation_requests
      where customer_id = $1
@@ -1089,6 +1212,8 @@ export async function getPublicTimeCardConfirmationRequest(token: string) {
             requests.reported_time_out, requests.response_note, requests.manager_note,
             requests.sent_at, requests.responded_at, requests.reviewed_at,
             requests.approved_at, requests.reviewed_by_user_id,
+            requests.request_kind, requests.missing_punch_id, requests.missing_punch_kind,
+            requests.scheduled_shift_id, requests.scheduled_start_at, requests.scheduled_end_at,
             requests.token_expires_at, requests.created_at, requests.updated_at,
             customers.company_name, customers.contact_name,
             contacts.phone, contacts.sms_consent_at
@@ -1115,6 +1240,10 @@ export async function getPublicTimeCardConfirmationRequest(token: string) {
       ? new Date(String(result.rows[0].sms_consent_at))
       : null,
     employeeName: request.employeeName,
+    requestKind: request.requestKind,
+    missingPunchKind: request.missingPunchKind,
+    scheduledStartAt: request.scheduledStartAt,
+    scheduledEndAt: request.scheduledEndAt,
     periodEnd: request.periodEnd,
     periodStart: request.periodStart,
     reportedShiftDate: request.reportedShiftDate,
@@ -1230,7 +1359,8 @@ export async function submitTimeCardEmployeeResponse(input: {
     await client.query("begin");
     const result = await client.query(
       `select requests.id, requests.customer_id, requests.employee_name,
-              requests.status, requests.token_expires_at,
+              requests.status, requests.token_expires_at, requests.request_kind,
+              requests.missing_punch_id, requests.reported_shift_date,
               customers.email as manager_email, customers.company_name,
               customers.contact_name
        from public.time_card_confirmation_requests requests
@@ -1261,6 +1391,10 @@ export async function submitTimeCardEmployeeResponse(input: {
       (typeof request.contact_name === "string" && request.contact_name.trim()) ||
       "Your team";
 
+    const submittedShiftDate = request.request_kind === "missing_punch"
+      ? String(request.reported_shift_date).slice(0, 10)
+      : input.shiftDate;
+
     await client.query(
       `update public.time_card_confirmation_requests
        set status = 'responded',
@@ -1275,12 +1409,18 @@ export async function submitTimeCardEmployeeResponse(input: {
       [
         requestId,
         parsed.code,
-        parsed.code === "b" ? input.shiftDate : null,
+        parsed.code === "b" ? submittedShiftDate : request.request_kind === "missing_punch" ? submittedShiftDate : null,
         parsed.code === "b" ? parsed.timeIn : null,
         parsed.code === "b" ? parsed.timeOut : null,
         input.responseNote.trim().slice(0, 2000) || null
       ]
     );
+    if (request.missing_punch_id) {
+      await client.query(
+        `update public.time_card_missing_punches set status = 'responded', updated_at = now() where id = $1`,
+        [request.missing_punch_id]
+      );
+    }
     await client.query(
       `insert into public.time_card_confirmation_audit_events (
         request_id, customer_id, event_type, actor_type, actor_identifier, details
@@ -1324,11 +1464,17 @@ export async function submitTimeCardEmployeeResponse(input: {
       requestId
     });
   }
+
+  return { customerId: String((await db.query(
+    `select customer_id from public.time_card_confirmation_requests where id = $1`,
+    [requestId]
+  )).rows[0]?.customer_id ?? ""), requestId };
 }
 
 export type InboundTimeCardSmsResult = {
   kind:
     | "accepted"
+    | "ambiguous_open_requests"
     | "duplicate"
     | "help"
     | "invalid_response"
@@ -1458,14 +1604,16 @@ export async function processInboundTimeCardSms(input: {
     await client.query("begin");
     const requestResult = await client.query(
       `select requests.id, requests.customer_id, requests.employee_name,
+              requests.missing_punch_id, requests.reported_shift_date,
               customers.email as manager_email, customers.company_name,
               customers.contact_name
        from public.time_card_confirmation_requests requests
        inner join public.customer_profiles customers on customers.id = requests.customer_id
        where requests.employee_id = $1 and requests.customer_id = $2
          and requests.status = 'pending' and requests.token_expires_at > now()
+         and requests.request_kind = 'missing_punch'
        order by requests.created_at desc
-       limit 1
+       limit 2
        for update of requests`,
       [contact.id, contact.customer_id]
     );
@@ -1483,6 +1631,18 @@ export async function processInboundTimeCardSms(input: {
       return { kind: "no_open_request" };
     }
 
+    if (requestResult.rows.length > 1) {
+      await client.query(
+        `update public.time_card_sms_messages
+         set customer_id = $2, employee_id = $3, status = 'processed',
+             processing_result = 'ambiguous_open_requests', updated_at = now()
+         where twilio_message_sid = $1`,
+        [input.messageSid, contact.customer_id, contact.id]
+      );
+      await client.query("commit");
+      return { kind: "ambiguous_open_requests" };
+    }
+
     requestId = String(request.id);
     managerEmail = String(request.manager_email ?? "");
     employeeName = String(request.employee_name);
@@ -1494,7 +1654,7 @@ export async function processInboundTimeCardSms(input: {
     await client.query(
       `update public.time_card_confirmation_requests
        set status = 'responded', response_code = $2,
-           reported_shift_date = null, reported_time_in = $3,
+           reported_shift_date = $5, reported_time_in = $3,
            reported_time_out = $4, response_note = 'Submitted by SMS',
            responded_at = now(), updated_at = now()
        where id = $1`,
@@ -1502,8 +1662,13 @@ export async function processInboundTimeCardSms(input: {
         requestId,
         parsed.code,
         parsed.code === "b" ? parsed.timeIn : null,
-        parsed.code === "b" ? parsed.timeOut : null
+        parsed.code === "b" ? parsed.timeOut : null,
+        request.reported_shift_date
       ]
+    );
+    await client.query(
+      `update public.time_card_missing_punches set status = 'responded', updated_at = now() where id = $1`,
+      [request.missing_punch_id]
     );
     await client.query(
       `insert into public.time_card_confirmation_audit_events (
@@ -1556,6 +1721,9 @@ export async function processInboundTimeCardSms(input: {
     });
   }
 
+  const { processMissingPunchResponse } = await import("@/lib/time-card-missing-punch-workflow");
+  await processMissingPunchResponse({ customerId: String(contact.customer_id), requestId });
+
   return { kind: "accepted" };
 }
 
@@ -1600,7 +1768,7 @@ export async function reviewTimeCardConfirmationRequest(input: {
   try {
     await client.query("begin");
     const result = await client.query(
-      `select id, customer_id, response_code
+      `select id, customer_id, response_code, missing_punch_id
        from public.time_card_confirmation_requests
        where id = $1 and customer_id = $2 and status = 'responded'
        for update`,
@@ -1651,6 +1819,15 @@ export async function reviewTimeCardConfirmationRequest(input: {
         input.reviewerUserId
       ]
     );
+    if (request.missing_punch_id) {
+      await client.query(
+        `update public.time_card_missing_punches
+         set status = $2, updated_at = now(),
+             resolved_at = case when $2 = 'approved' then now() else null end
+         where id = $1`,
+        [request.missing_punch_id, input.decision]
+      );
+    }
     await client.query(
       `insert into public.time_card_confirmation_audit_events (
         request_id, customer_id, event_type, actor_type, actor_identifier, details

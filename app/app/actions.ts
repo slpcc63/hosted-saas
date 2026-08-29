@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireSession } from "@/lib/auth/server";
 import { requireAdmin } from "@/lib/authorization";
+import { db } from "@/lib/db";
 import {
   getCustomerByUserId,
   getOrCreateCustomerProfile,
@@ -49,6 +50,11 @@ import {
   updateTimeCardEmployeeContact,
   upsertTimeCardConfirmationSettings
 } from "@/lib/time-card-email-workflow";
+import {
+  applyApprovedMissingPunch,
+  processMissingPunchResponse,
+  submitMissingPunchDigest
+} from "@/lib/time-card-missing-punch-workflow";
 
 function slugify(value: string) {
   return value
@@ -645,7 +651,12 @@ export async function saveTimeCardConfirmationSettingsAction(formData: FormData)
       sendDayOfWeek: Number(formData.get("sendDayOfWeek")),
       sendTimeLocal: String(formData.get("sendTimeLocal") ?? ""),
       timezone: String(formData.get("timezone") ?? ""),
-      periodDays: Number(formData.get("periodDays"))
+      periodDays: Number(formData.get("periodDays")),
+      sameDayEnabled: String(formData.get("sameDayEnabled") ?? "") === "on",
+      graceMinutes: Number(formData.get("graceMinutes")),
+      workedResponseHandling: String(formData.get("workedResponseHandling")) === "automatic"
+        ? "automatic"
+        : "require_approval"
     });
   } catch {
     failed = true;
@@ -757,7 +768,7 @@ export async function submitTimeCardEmployeeResponseAction(formData: FormData) {
   let errorCode: string | null = null;
 
   try {
-    await submitTimeCardEmployeeResponse({
+    const submitted = await submitTimeCardEmployeeResponse({
       token,
       responseCode: String(formData.get("responseCode") ?? ""),
       shiftDate: String(formData.get("shiftDate") ?? ""),
@@ -765,6 +776,9 @@ export async function submitTimeCardEmployeeResponseAction(formData: FormData) {
       timeOut: String(formData.get("timeOut") ?? ""),
       responseNote: String(formData.get("responseNote") ?? "")
     });
+    if (submitted.customerId) {
+      await processMissingPunchResponse(submitted);
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to submit response";
     errorCode = message.includes("expired")
@@ -841,6 +855,25 @@ export async function reviewTimeCardConfirmationRequestAction(formData: FormData
       timeOut: String(formData.get("timeOut") ?? ""),
       managerNote: String(formData.get("managerNote") ?? "")
     });
+    if (decision === "approved") {
+      const application = await applyApprovedMissingPunch({
+        customerId: customer.id,
+        requestId: String(formData.get("requestId") ?? "")
+      });
+      if (
+        application.status !== "not_applicable" &&
+        application.status !== "applied" &&
+        application.status !== "resolved_no_work"
+      ) {
+        await db.query(
+          `update public.time_card_confirmation_requests set status = 'responded',
+             reviewed_at = null, approved_at = null, reviewed_by_user_id = null, updated_at = now()
+           where id = $1 and customer_id = $2`,
+          [String(formData.get("requestId") ?? ""), customer.id]
+        );
+        throw new Error(`Square update needs manager attention: ${application.status}`);
+      }
+    }
   } catch {
     failed = true;
   }
@@ -851,4 +884,34 @@ export async function reviewTimeCardConfirmationRequestAction(formData: FormData
 
   revalidatePath("/app/time-card-manager/responses");
   redirect(`${redirectTo}?saved=${decision}`);
+}
+
+export async function submitMissingPunchDigestAction(formData: FormData) {
+  const token = String(formData.get("token") ?? "").trim();
+  const responsePath = `/app/time-card-digest/${encodeURIComponent(token)}`;
+  const itemIds = formData.getAll("missingPunchId").map(String);
+  const responses = itemIds.map((missingPunchId) => ({
+    missingPunchId,
+    code: String(formData.get(`responseCode:${missingPunchId}`)) === "b" ? "b" as const : "a" as const,
+    timeIn: String(formData.get(`timeIn:${missingPunchId}`) ?? "") || undefined,
+    timeOut: String(formData.get(`timeOut:${missingPunchId}`) ?? "") || undefined
+  }));
+  try {
+    const requestIds = await submitMissingPunchDigest({ token, responses });
+    for (const requestId of requestIds) {
+      const request = await db.query(
+        `select customer_id from public.time_card_confirmation_requests where id = $1`,
+        [requestId]
+      );
+      if (request.rows[0]) {
+        await processMissingPunchResponse({ customerId: String(request.rows[0].customer_id), requestId });
+      }
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unable to submit weekly review";
+    const errorCode = message.includes("already") ? "already_submitted" : message.includes("expired") ? "expired" : "validation";
+    redirect(`${responsePath}?error=${errorCode}`);
+  }
+  revalidatePath("/app/time-card-manager/responses");
+  redirect(`${responsePath}?saved=response`);
 }

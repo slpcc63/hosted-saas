@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test:calendar-sync": "node --no-warnings --experimental-strip-types --test tests/calendar-sync.test.mts",
     "test:time-card": "node --no-warnings --experimental-strip-types --test tests/time-card-response-parser.test.mts",
-    "test": "npm run test:calendar-sync && npm run test:time-card",
+    "test:missing-punch": "node --no-warnings --experimental-strip-types --test tests/time-card-missing-punch.test.mts",
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

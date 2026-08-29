@@ -58,6 +58,10 @@ export async function POST(request: NextRequest) {
     return twiml("SLPCC63 Time Card Manager: No open time confirmation was found for this number.");
   }
 
+  if (result.kind === "ambiguous_open_requests") {
+    return twiml("SLPCC63 Time Card Manager: More than one punch needs attention. Please use the secure link in your latest message.");
+  }
+
   if (result.kind === "not_opted_in") {
     return twiml("SLPCC63 Time Card Manager: This number is not opted in. Use your secure email link to enroll.");
   }
@@ -68,4 +72,3 @@ export async function POST(request: NextRequest) {
 
   return twiml("SLPCC63 Time Card Manager: Reply A if you did not work, or B + 9am - 5pm if you worked. Reply STOP to opt out.");
 }
-

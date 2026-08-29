@@ -31,6 +31,13 @@ export default async function EmployeeResponsePage({
     : request.responseCode === "b"
       ? `Worked ${request.reportedTimeIn ?? ""}–${request.reportedTimeOut ?? ""}`
       : null;
+  const scheduledShiftLabel = request.scheduledStartAt && request.scheduledEndAt
+    ? new Intl.DateTimeFormat("en-US", {
+        dateStyle: "full",
+        timeStyle: "short",
+        timeZone: request.timezone
+      }).format(request.scheduledStartAt)
+    : null;
 
   return (
     <>
@@ -41,8 +48,9 @@ export default async function EmployeeResponsePage({
             <div className="eyebrow">Secure time confirmation</div>
             <h1>Confirm your time</h1>
             <p>
-              {request.companyName} asked {request.employeeName} to confirm time for
-              {` ${request.periodStart} through ${request.periodEnd}`}.
+              {request.requestKind === "missing_punch"
+                ? `${request.companyName} is missing ${request.missingPunchKind === "missing_clock_in" ? "a clock-in" : "a clock-out"} for ${request.employeeName}'s shift on ${scheduledShiftLabel}.`
+                : `${request.companyName} asked ${request.employeeName} to confirm time for ${request.periodStart} through ${request.periodEnd}.`}
             </p>
 
             {query?.saved === "response" ? (
@@ -89,22 +97,26 @@ export default async function EmployeeResponsePage({
                     <input name="responseCode" type="radio" value="a" required />
                     <span>
                       <strong>I did not work</strong>
-                      No hours should be reported for this period.
+                      No hours should be reported for this shift.
                     </span>
                   </label>
                   <label className="response-choice">
                     <input name="responseCode" type="radio" value="b" required />
                     <span>
                       <strong>I worked</strong>
-                      Enter the shift date and actual times below.
+                      Enter the actual times for this shift below.
                     </span>
                   </label>
                 </fieldset>
-                <div className="form-grid-three">
-                  <label className="field">
-                    <span>Shift date</span>
-                    <input name="shiftDate" type="date" />
-                  </label>
+                <div className={request.requestKind === "missing_punch" ? "form-grid-two" : "form-grid-three"}>
+                  {request.requestKind === "missing_punch" ? (
+                    <input name="shiftDate" type="hidden" value={request.periodStart} />
+                  ) : (
+                    <label className="field">
+                      <span>Shift date</span>
+                      <input name="shiftDate" type="date" />
+                    </label>
+                  )}
                   <label className="field">
                     <span>Time in</span>
                     <input name="timeIn" type="time" />
