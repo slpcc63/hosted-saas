@@ -14,6 +14,7 @@ import { isTimeCardManagerAutomationLive } from "@/lib/square-time-card-manager"
 import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
 import { buildDefaultManualConfirmationPeriod } from "@/lib/time-card-confirmation-schedule";
 import { isTimeCardSmsLive } from "@/lib/twilio";
+import { isMissingPunchWorkflowLive } from "@/lib/time-card-missing-punch-workflow";
 import {
   getTimeCardConfirmationAuditEvents,
   getTimeCardConfirmationRuns,
@@ -80,6 +81,7 @@ export default async function ManagerResponsesPage({
     searchParams
   ]);
   const automationLive = isTimeCardManagerAutomationLive();
+  const missingPunchWorkflowLive = isMissingPunchWorkflowLive();
   const smsLive = isTimeCardSmsLive();
   const now = new Date();
   const defaultPeriod = buildDefaultManualConfirmationPeriod(now, confirmationSettings.timezone);
@@ -451,9 +453,9 @@ export default async function ManagerResponsesPage({
                 <span className="status-chip">
                   {!subscription
                     ? "locked"
-                    : confirmationSettings.automationEnabled && automationLive
+                    : confirmationSettings.automationEnabled && automationLive && missingPunchWorkflowLive
                       ? "enabled"
-                      : "off"}
+                      : confirmationSettings.automationEnabled ? "staged" : "off"}
                 </span>
               </summary>
               <div className="workflow-disclosure-content">
@@ -465,9 +467,9 @@ export default async function ManagerResponsesPage({
               <span className="status-chip">
                 {!subscription
                   ? "subscription required"
-                  : confirmationSettings.automationEnabled && automationLive
+                  : confirmationSettings.automationEnabled && automationLive && missingPunchWorkflowLive
                     ? "enabled"
-                    : "off"}
+                    : confirmationSettings.automationEnabled ? "staged" : "off"}
               </span>
             </div>
             <form action={saveTimeCardConfirmationSettingsAction} className="auth-form">
@@ -557,6 +559,9 @@ export default async function ManagerResponsesPage({
               ) : null}
               {!automationLive ? (
                 <p className="auth-helper">Missing-punch automation is temporarily unavailable.</p>
+              ) : null}
+              {!missingPunchWorkflowLive ? (
+                <p className="auth-helper">The new shift-specific workflow is staged for testing and is not sending yet.</p>
               ) : null}
               {subscription ? (
                 <ConfirmFormSubmit

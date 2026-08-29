@@ -34,6 +34,10 @@ import { isTimeCardSmsLive, sendTwilioMessage } from "@/lib/twilio";
 
 const timezoneFallback = "America/Los_Angeles";
 
+export function isMissingPunchWorkflowLive() {
+  return process.env.TIME_CARD_MISSING_PUNCH_LIVE === "true";
+}
+
 type MissingPunchRow = {
   id: string;
   kind: MissingPunchKind;
@@ -454,7 +458,7 @@ async function sendManagerSummary(settings: TimeCardConfirmationSettings, now: D
 export async function runMissingPunchAutomationBatch(input?: { now?: Date }) {
   await ensureTimeCardEmailWorkflowTables();
   const now = input?.now ?? new Date();
-  if (!process.env.CRON_SECRET || process.env.TIME_CARD_AUTOMATION_LIVE === "false") {
+  if (!process.env.CRON_SECRET || !isMissingPunchWorkflowLive() || process.env.TIME_CARD_AUTOMATION_LIVE === "false") {
     return { now: now.toISOString(), status: "automation_disabled", customers: [] };
   }
   const windowMinutes = Math.min(Math.max(Number(process.env.TIME_CARD_AUTOMATION_WINDOW_MINUTES ?? 15) || 15, 5), 60);
