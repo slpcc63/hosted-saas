@@ -29,7 +29,13 @@ export async function GET(
     });
 
     if (request.headers.get("if-none-match") === calendar.etag) {
-      return new Response(null, { status: 304, headers: { ETag: calendar.etag } });
+      return new Response(null, {
+        status: 304,
+        headers: {
+          ETag: calendar.etag,
+          "Vercel-CDN-Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600"
+        }
+      });
     }
 
     return new Response(calendar.body, {
@@ -38,6 +44,7 @@ export async function GET(
         "Content-Disposition": `inline; filename="${encodeURIComponent(feed.settings.calendarName)}.ics"`,
         "Content-Type": "text/calendar; charset=utf-8",
         ETag: calendar.etag,
+        "Vercel-CDN-Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600",
         "X-Robots-Tag": "noindex"
       }
     });
