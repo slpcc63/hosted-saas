@@ -14,27 +14,24 @@ them back up quickly.
 
 ### 1. Time card notification provider integration
 
-- Status: Paused
+- Status: Live readiness verified; controlled acceptance pending
 - Current state:
-  Subscription-aware entitlement, notification settings, schedule controls,
-  monthly text usage tracking, and managed email sender addresses on
-  `@slpcc63.com` are now wired in-app for the Square Time Card Manager. A
-  Resend-compatible email helper is in the codebase, and the app can now send a
-  manual Time Card Manager test email plus a missed clock-out alert email
-  through the configured managed sender. The app can also scan live Square open
-  timecards and send missed clock-out alerts when the existing Square
-  connection includes `TIMECARDS_READ` and `EMPLOYEES_READ`. Scheduled runs are
-  now wired through a protected automation route plus a 15-minute GitHub
-  Actions workflow with duplicate-run and duplicate-alert protection. SMS still
-  needs a provider.
+  Resend email and consent-gated Twilio SMS are configured in production. The
+  shift-specific missing-punch workflow, secure weekly digest, manager summary,
+  direct A/B replies for a single eligible shift, approval setting, duplicate
+  protection, and 15-minute protected automation route are implemented. On
+  September 22, 2026, production Neon access was restored after its compute
+  quota was exhausted, and the Square production token was verified with
+  `TIMECARDS_READ` and `EMPLOYEES_READ` through October 19, 2026. Calendar-feed
+  responses are now cached at Vercel's CDN for 15 minutes to reduce repeated
+  Neon and Square work while preserving the Time Card Manager scan cadence.
 - What is needed from Shannon:
-  - Which email provider should send these notifications
-  - Which texting provider should send SMS
-  - Add `CRON_SECRET` in Vercel if it is not already present
-  - Add the matching GitHub secret `TIME_CARD_AUTOMATION_CRON_SECRET`
+  - Publish one short controlled Square shift for the enrolled test employee
+    without clocking that employee in or out
 - Next step when resumed:
-  Verify the production scheduler runs against a real Square-connected customer,
-  then connect SMS to the chosen provider.
+  Record one complete detection → employee notification → response → manager
+  review scenario, including duplicate protection. Square write-back remains a
+  separate later milestone.
 
 ### 2. Stripe live billing activation
 
