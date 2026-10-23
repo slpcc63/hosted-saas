@@ -1,3 +1,4 @@
+import { assertTcmDeliveryAllowed, isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import "server-only";
 
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -35,7 +36,7 @@ import { isTimeCardSmsLive, sendTwilioMessage } from "@/lib/twilio";
 const timezoneFallback = "America/Los_Angeles";
 
 export function isMissingPunchWorkflowLive() {
-  return process.env.TIME_CARD_MISSING_PUNCH_LIVE === "true";
+  return !isTcmDeliveryOff() && process.env.TIME_CARD_MISSING_PUNCH_LIVE === "true";
 }
 
 type MissingPunchRow = {

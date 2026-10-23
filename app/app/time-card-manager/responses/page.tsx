@@ -1,3 +1,4 @@
+import { isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import {
   reviewTimeCardConfirmationRequestAction,
   resendTimeCardConfirmationRequestAction,
@@ -80,6 +81,8 @@ export default async function ManagerResponsesPage({
     }),
     searchParams
   ]);
+  const deliveryOff = isTcmDeliveryOff();
+  const sendingAvailable = Boolean(subscription) && !deliveryOff;
   const automationLive = isTimeCardManagerAutomationLive();
   const missingPunchWorkflowLive = isMissingPunchWorkflowLive();
   const smsLive = isTimeCardSmsLive();
@@ -115,11 +118,12 @@ export default async function ManagerResponsesPage({
         <div className="section-heading">
           <div>
             <h1>Employee confirmations</h1>
-            <p>Manage employee contacts, send requests, and review email, form, and text responses.</p>
+            <p>Manage employee contacts and review employee responses.</p>
           </div>
           <a className="pill" href={timeCardPath}>Back to alerts</a>
         </div>
 
+        {deliveryOff ? <p className="dashboard-alert">Delivery off — email, text, reminders and automation are unavailable. Review, reports and CSV export remain available.</p> : null}
         {query?.saved === "employees_synced" ? (
           <p className="form-success">Synced {query.count ?? "0"} active Square employees.</p>
         ) : null}
@@ -180,7 +184,7 @@ export default async function ManagerResponsesPage({
               Sending confirmations, reminders, and weekly automation remain locked until
               a Time Card Manager subscription is active.
             </p>
-            <a className="pill primary" href={subscriptionsPath}>View subscription plans</a>
+            {deliveryOff ? <span className="status-chip">Delivery off</span> : <a className="pill" href={subscriptionsPath}>View subscription plans</a>}
           </div>
         ) : null}
 
@@ -356,7 +360,7 @@ export default async function ManagerResponsesPage({
                     <form action={resendTimeCardConfirmationRequestAction}>
                       <input name="redirectTo" type="hidden" value={redirectTo} />
                       <input name="requestId" type="hidden" value={request.id} />
-                      {subscription ? (
+                      {sendingAvailable ? (
                         <ConfirmFormSubmit
                           action="resend_confirmation"
                           buttonClassName="pill pill-button"
@@ -368,7 +372,7 @@ export default async function ManagerResponsesPage({
                           periodStart={request.periodStart}
                         />
                       ) : (
-                        <a className="pill" href={subscriptionsPath}>Subscription required</a>
+                        deliveryOff ? <span className="status-chip">Delivery off</span> : <a className="pill" href={subscriptionsPath}>Subscription required</a>
                       )}
                     </form>
                   </article>
@@ -477,7 +481,7 @@ export default async function ManagerResponsesPage({
               <label className="checkbox-row">
                 <input
                   defaultChecked={confirmationSettings.automationEnabled}
-                  disabled={!automationLive || !subscription}
+                  disabled={!automationLive || !sendingAvailable}
                   name="automationEnabled"
                   type="checkbox"
                 />
@@ -486,7 +490,7 @@ export default async function ManagerResponsesPage({
               <label className="checkbox-row">
                 <input
                   defaultChecked={confirmationSettings.sameDayEnabled}
-                  disabled={!automationLive || !subscription}
+                  disabled={!automationLive || !sendingAvailable}
                   name="sameDayEnabled"
                   type="checkbox"
                 />
@@ -494,12 +498,12 @@ export default async function ManagerResponsesPage({
               </label>
               <label className="field">
                 <span>Wait this many minutes after scheduled start or end</span>
-                <input disabled={!subscription} defaultValue={confirmationSettings.graceMinutes} max="240" min="0" name="graceMinutes" type="number" />
+                <input disabled={!sendingAvailable} defaultValue={confirmationSettings.graceMinutes} max="240" min="0" name="graceMinutes" type="number" />
               </label>
               <div className="form-grid-two">
                 <label className="field">
                   <span>Weekly digest day</span>
-                  <select disabled={!subscription} defaultValue={confirmationSettings.sendDayOfWeek} name="sendDayOfWeek">
+                  <select disabled={!sendingAvailable} defaultValue={confirmationSettings.sendDayOfWeek} name="sendDayOfWeek">
                     {weekdayOptions.map((day, index) => (
                       <option key={day} value={index}>{day}</option>
                     ))}
@@ -507,12 +511,12 @@ export default async function ManagerResponsesPage({
                 </label>
                 <label className="field">
                   <span>Weekly digest time</span>
-                  <input disabled={!subscription} defaultValue={confirmationSettings.sendTimeLocal} name="sendTimeLocal" type="time" />
+                  <input disabled={!sendingAvailable} defaultValue={confirmationSettings.sendTimeLocal} name="sendTimeLocal" type="time" />
                 </label>
               </div>
               <label className="field">
                 <span>Schedule timezone</span>
-                <select disabled={!subscription} defaultValue={confirmationSettings.timezone} name="timezone">
+                <select disabled={!sendingAvailable} defaultValue={confirmationSettings.timezone} name="timezone">
                   <option value="America/Los_Angeles">Pacific Time</option>
                   <option value="America/Denver">Mountain Time</option>
                   <option value="America/Chicago">Central Time</option>
@@ -521,11 +525,11 @@ export default async function ManagerResponsesPage({
               </label>
               <label className="field">
                 <span>Days included in each weekly digest</span>
-                <input disabled={!subscription} defaultValue={confirmationSettings.periodDays} max="31" min="1" name="periodDays" type="number" />
+                <input disabled={!sendingAvailable} defaultValue={confirmationSettings.periodDays} max="31" min="1" name="periodDays" type="number" />
               </label>
               <label className="field">
                 <span>Worked-response handling</span>
-                <select disabled={!subscription} defaultValue={confirmationSettings.workedResponseHandling} name="workedResponseHandling">
+                <select disabled={!sendingAvailable} defaultValue={confirmationSettings.workedResponseHandling} name="workedResponseHandling">
                   <option value="require_approval">Require manager approval</option>
                   <option value="automatic">Automatically update Square when safe</option>
                 </select>
@@ -536,7 +540,7 @@ export default async function ManagerResponsesPage({
               <label className="checkbox-row">
                 <input
                   defaultChecked={confirmationSettings.managerReminderEnabled}
-                  disabled={!automationLive || !subscription}
+                  disabled={!automationLive || !sendingAvailable}
                   name="managerReminderEnabled"
                   type="checkbox"
                 />
@@ -545,7 +549,7 @@ export default async function ManagerResponsesPage({
               <label className="field">
                 <span>Manager summary time</span>
                 <input
-                  disabled={!subscription}
+                  disabled={!sendingAvailable}
                   defaultValue={confirmationSettings.managerReminderTimeLocal}
                   name="managerReminderTimeLocal"
                   type="time"
@@ -563,7 +567,7 @@ export default async function ManagerResponsesPage({
               {!missingPunchWorkflowLive ? (
                 <p className="auth-helper">The new shift-specific workflow is staged for testing and is not sending yet.</p>
               ) : null}
-              {subscription ? (
+              {sendingAvailable ? (
                 <ConfirmFormSubmit
                   action="save_schedule"
                   buttonClassName="pill pill-button"
@@ -572,7 +576,7 @@ export default async function ManagerResponsesPage({
                   employeeCount={emailReadyCount}
                 />
               ) : (
-                <a className="pill primary" href={subscriptionsPath}>View subscription plans</a>
+                deliveryOff ? <span className="status-chip">Delivery off</span> : <a className="pill" href={subscriptionsPath}>View subscription plans</a>
               )}
             </form>
 
@@ -680,7 +684,7 @@ export default async function ManagerResponsesPage({
                           <input defaultValue={defaultPeriod.periodEnd} name="periodEnd" type="date" />
                         </label>
                       </div>
-                      {subscription ? (
+                      {sendingAvailable ? (
                         <ConfirmFormSubmit
                           action="send_confirmation"
                           buttonLabel={smsLive && employee.smsConsentStatus === "opted_in" ? "Send email + text" : "Send confirmation email"}
@@ -691,7 +695,7 @@ export default async function ManagerResponsesPage({
                           periodStart={defaultPeriod.periodStart}
                         />
                       ) : (
-                        <a className="pill" href={subscriptionsPath}>Subscription required to send</a>
+                        deliveryOff ? <span className="status-chip">Delivery off</span> : <a className="pill" href={subscriptionsPath}>Subscription required to send</a>
                       )}
                     </form>
                   ) : null}

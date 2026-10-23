@@ -1,3 +1,4 @@
+import { assertTcmDeliveryAllowed, isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import "server-only";
 
 const fallbackFromEmail = "notifications@slpcc63.com";
@@ -98,6 +99,7 @@ export function resolveManagedSenderEmail(localPart?: string | null) {
 }
 
 export async function sendTransactionalEmail(input: SendTransactionalEmailInput) {
+  assertTcmDeliveryAllowed();
   const apiKey = process.env.RESEND_API_KEY?.trim();
 
   if (!apiKey) {

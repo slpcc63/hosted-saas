@@ -1,5 +1,7 @@
 "use server";
 
+import { assertTcmDeliveryAllowed } from "@/lib/tcm-delivery-policy";
+
 import { disconnectTimeCardSandbox } from "@/lib/time-card-disconnect";
 
 import { redirect } from "next/navigation";
@@ -226,6 +228,7 @@ export async function openBillingPortalAction(formData: FormData) {
 }
 
 export async function saveTimeCardManagerSettingsAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -264,6 +267,7 @@ export async function saveTimeCardManagerSettingsAction(formData: FormData) {
 }
 
 export async function addTimeCardManagerScheduleEntryAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -297,6 +301,7 @@ export async function addTimeCardManagerScheduleEntryAction(formData: FormData) 
 }
 
 export async function saveTimeCardManagerSenderAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -336,6 +341,7 @@ export async function saveTimeCardManagerSenderAction(formData: FormData) {
 }
 
 export async function sendTimeCardManagerTestEmailAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -365,6 +371,7 @@ export async function sendTimeCardManagerTestEmailAction(formData: FormData) {
 }
 
 export async function sendTimeCardManagerMissedClockOutEmailAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -411,6 +418,7 @@ export async function sendTimeCardManagerMissedClockOutEmailAction(formData: For
 }
 
 export async function scanSquareMissedClockOutsAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = String(formData.get("redirectTo") ?? "/time-card-manager");
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -557,6 +565,7 @@ export async function saveTimeCardEmployeeContactAction(formData: FormData) {
 }
 
 export async function saveTimeCardConfirmationSettingsAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -605,6 +614,7 @@ export async function saveTimeCardConfirmationSettingsAction(formData: FormData)
 }
 
 export async function sendTimeCardConfirmationRequestAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -654,6 +664,7 @@ export async function sendTimeCardConfirmationRequestAction(formData: FormData) 
 }
 
 export async function resendTimeCardConfirmationRequestAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const redirectTo = getTimeCardWorkflowRedirect(formData.get("redirectTo"));
   const session = await requireSession(redirectTo);
   const customer = await getCustomerByUserId(session.user.id);
@@ -733,6 +744,7 @@ export async function submitTimeCardEmployeeResponseAction(formData: FormData) {
 }
 
 export async function saveTimeCardEmployeeSmsConsentAction(formData: FormData) {
+  assertTcmDeliveryAllowed();
   const token = String(formData.get("token") ?? "").trim();
   const responsePath = `/app/time-card-response/${encodeURIComponent(token)}`;
   let errorCode: string | null = null;

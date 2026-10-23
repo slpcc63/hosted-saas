@@ -1,3 +1,4 @@
+import { assertTcmDeliveryAllowed, isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import "server-only";
 
 import { databaseDate } from "@/lib/database-date";
@@ -873,6 +874,7 @@ export async function createAndSendTimeCardConfirmationRequest(input: {
   periodEnd: string;
   periodStart: string;
 }) {
+  assertTcmDeliveryAllowed();
   await ensureTimeCardEmailWorkflowTables();
 
   if (!isValidDate(input.periodStart) || !isValidDate(input.periodEnd)) {
@@ -1058,6 +1060,7 @@ export async function resendTimeCardConfirmationRequest(input: {
   customerId: string;
   requestId: string;
 }) {
+  assertTcmDeliveryAllowed();
   await ensureTimeCardEmailWorkflowTables();
   const result = await db.query(
     `select requests.id, requests.customer_id, requests.employee_name,
@@ -1266,6 +1269,7 @@ export async function saveTimeCardEmployeeSmsConsent(input: {
   phone: string;
   token: string;
 }) {
+  assertTcmDeliveryAllowed();
   await ensureTimeCardEmailWorkflowTables();
 
   if (!input.consent) {
@@ -1964,7 +1968,7 @@ export async function runTimeCardConfirmationAutomationBatch(input?: { now?: Dat
   await ensureTimeCardEmailWorkflowTables();
   const now = input?.now ?? new Date();
 
-  if (!process.env.CRON_SECRET || process.env.TIME_CARD_AUTOMATION_LIVE === "false") {
+  if (isTcmDeliveryOff() || !process.env.CRON_SECRET || process.env.TIME_CARD_AUTOMATION_LIVE === "false") {
     return {
       now: now.toISOString(),
       dueCustomers: 0,

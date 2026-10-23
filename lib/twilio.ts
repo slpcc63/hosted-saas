@@ -1,3 +1,4 @@
+import { assertTcmDeliveryAllowed, isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import "server-only";
 
 export type TwilioMessageResult = {
@@ -25,7 +26,7 @@ export function isTwilioMessagingConfigured() {
 }
 
 export function isTimeCardSmsLive() {
-  return process.env.TIME_CARD_TEXTING_LIVE === "true" && isTwilioMessagingConfigured();
+  return !isTcmDeliveryOff() && process.env.TIME_CARD_TEXTING_LIVE === "true" && isTwilioMessagingConfigured();
 }
 
 export function getTwilioAuthToken() {
@@ -37,6 +38,7 @@ export async function sendTwilioMessage(input: {
   statusCallback?: string;
   to: string;
 }) {
+  assertTcmDeliveryAllowed();
   const configuration = getTwilioConfiguration();
 
   if (!isTwilioMessagingConfigured()) {

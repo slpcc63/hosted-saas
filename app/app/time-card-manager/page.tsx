@@ -1,3 +1,4 @@
+import { isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import { SiteHeader } from "@/components/site-header";
 import {
   disconnectTimeCardSandboxAction,
@@ -57,6 +58,7 @@ export default async function TimeCardManagerPage({
     getTimeCardManagerSquareStatus(customer.id)
   ]);
   const params = await searchParams;
+  const deliveryOff = isTcmDeliveryOff();
 
   return (
     <>
@@ -67,14 +69,12 @@ export default async function TimeCardManagerPage({
           <section className="dashboard-card">
             <h1>Notification controls</h1>
             <p>
-              M4 provides live email notifications, secure employee confirmations,
-              manager review, reporting, and protected weekly scheduling. Text
-              messages are planned for a later release and remain off.
+              {deliveryOff ? "Delivery off — this synthetic Preview sends no email or text messages. Reminders, scheduling and text opt-in are unavailable. Employee responses, manager review, reports and CSV export remain available." : "M4 provides live email notifications, secure employee confirmations, manager review, reporting, and protected weekly scheduling. Text messages are planned for a later release and remain off."}
             </p>
             <div className="dashboard-alert">
               <strong>Employee email confirmations</strong>
               <p>
-                Sync the Square employee roster, send secure confirmation emails,
+                Sync the Square employee roster, review secure confirmations,
                 and approve or reject submitted time in the manager inbox.
               </p>
               <a className="pill primary" href={responsesPath}>
@@ -223,7 +223,24 @@ export default async function TimeCardManagerPage({
               </p>
             ) : null}
 
-            {!overview.entitlement ? (
+                  {process.env.VERCEL_ENV === 'preview' && process.env.SQUARE_ENVIRONMENT === 'sandbox' ? (
+                    <article className="dashboard-subcard">
+                      <h2>Square Sandbox connection</h2>
+                      {params?.saved === 'square_disconnected' ? <p className="form-success">Square disconnected. Saved responses and audit history are preserved.</p> : null}
+                      {params?.error === 'square_disconnect_failed' ? <p className="form-error">Disconnect could not finish. No saved responses were removed. Verify Square access before retrying.</p> : null}
+                      {params?.error === 'disconnect_confirmation' ? <p className="form-error">Confirm the disconnect before continuing.</p> : null}
+                      {squareStatus.connected ? (
+                        <form action={disconnectTimeCardSandboxAction}>
+                          <p>Revoke this Sandbox connection and stop automated runs. Reconnect to restore Square access. Saved responses and audit history remain available.</p>
+                          <label><input name="confirmDisconnect" type="checkbox" required /> I confirm disconnecting this Sandbox connection.</label>
+                          <button className="pill pill-button" type="submit">Disconnect Square Sandbox</button>
+                        </form>
+                      ) : <p>Sandbox is disconnected. Use Connect Square below to reconnect.</p>}
+                    </article>
+                  ) : null}
+
+            {deliveryOff ? <p>Square Sandbox: {squareStatus.connected ? "connected" : "disconnected"}. <a className="pill" href={squareConnectHref}>{squareStatus.connected ? "Reconnect Square Sandbox" : "Connect Square Sandbox"}</a></p> : null}
+            {deliveryOff ? <p className="dashboard-alert">Delivery settings are locked for this demonstration. No messages will be sent.</p> : !overview.entitlement ? (
               <div className="metric">
                 <strong>No active subscription</strong>
                 Review history and setup remain available. Subscribe before sending
@@ -338,21 +355,6 @@ export default async function TimeCardManagerPage({
                     </p>
                   </article>
 
-                  {process.env.VERCEL_ENV === 'preview' && process.env.SQUARE_ENVIRONMENT === 'sandbox' ? (
-                    <article className="dashboard-subcard">
-                      <h2>Square Sandbox connection</h2>
-                      {params?.saved === 'square_disconnected' ? <p className="form-success">Square disconnected. Saved responses and audit history are preserved.</p> : null}
-                      {params?.error === 'square_disconnect_failed' ? <p className="form-error">Disconnect could not finish. No saved responses were removed. Verify Square access before retrying.</p> : null}
-                      {params?.error === 'disconnect_confirmation' ? <p className="form-error">Confirm the disconnect before continuing.</p> : null}
-                      {squareStatus.connected ? (
-                        <form action={disconnectTimeCardSandboxAction}>
-                          <p>Revoke this Sandbox connection and stop automated runs. Reconnect to restore Square access. Saved responses and audit history remain available.</p>
-                          <label><input name="confirmDisconnect" type="checkbox" required /> I confirm disconnecting this Sandbox connection.</label>
-                          <button className="pill pill-button" type="submit">Disconnect Square Sandbox</button>
-                        </form>
-                      ) : <p>Sandbox is disconnected. Use Connect Square below to reconnect.</p>}
-                    </article>
-                  ) : null}
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
                       <div>
@@ -569,6 +571,7 @@ export default async function TimeCardManagerPage({
 
           <aside className="dashboard-card">
             <h2>M4 status</h2>
+            {deliveryOff ? <p>Delivery off. Employee review, reports and CSV export are available. No automated runs or messages are permitted in this demonstration.</p> : <>
             <ul className="checklist compact-list">
               <li>Secure employee email confirmations and manager approval are live.</li>
               <li>Reporting, CSV export, reminders, and overdue tracking are ready.</li>
@@ -579,6 +582,7 @@ export default async function TimeCardManagerPage({
               <strong>Next run</strong>
               {overview.nextRunLabel ?? "No automated run scheduled yet"}
             </div>
+            </>}
           </aside>
         </div>
       </main>

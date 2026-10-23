@@ -1,3 +1,4 @@
+import { isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import { EmployeeLegalLinks } from "@/components/employee-legal-links";
 import { notFound } from "next/navigation";
 
@@ -154,7 +155,7 @@ export default async function EmployeeResponsePage({
               <p className="form-error">This request is no longer accepting responses.</p>
             ) : null}
 
-            {!expired ? (
+            {!expired && !isTcmDeliveryOff() ? (
               <section className="sms-consent-panel" aria-labelledby="sms-consent-heading">
                 <div className="eyebrow">Optional text notifications</div>
                 <h2 id="sms-consent-heading">Receive future confirmations by text</h2>

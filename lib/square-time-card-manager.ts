@@ -1,3 +1,4 @@
+import { assertTcmDeliveryAllowed, isTcmDeliveryOff } from "@/lib/tcm-delivery-policy";
 import "server-only";
 
 import { db } from "@/lib/db";
@@ -164,11 +165,11 @@ function getDefaultPluginInstallConfig() {
 }
 
 export function isTimeCardManagerTextingLive() {
-  return process.env.TIME_CARD_TEXTING_LIVE === "true";
+  return !isTcmDeliveryOff() && process.env.TIME_CARD_TEXTING_LIVE === "true";
 }
 
 export function isTimeCardManagerAutomationLive() {
-  return Boolean(process.env.CRON_SECRET) && process.env.TIME_CARD_AUTOMATION_LIVE !== "false";
+  return !isTcmDeliveryOff() && Boolean(process.env.CRON_SECRET) && process.env.TIME_CARD_AUTOMATION_LIVE !== "false";
 }
 
 export function getTimeCardManagerAutomationWindowMinutes() {
@@ -1051,6 +1052,7 @@ async function getAutomationDueEntries(now: Date) {
 export async function runTimeCardManagerAutomationBatch(input?: {
   now?: Date;
 }) {
+  assertTcmDeliveryAllowed();
   const now = input?.now ?? new Date();
   const windowStartedAt = getAutomationWindowStartedAt(
     now,
@@ -1201,6 +1203,7 @@ export async function runTimeCardManagerAutomationBatch(input?: {
 export async function sendTimeCardManagerTestEmail(input: {
   customer: Pick<CustomerProfile, "companyName" | "contactName" | "email" | "id">;
 }) {
+  assertTcmDeliveryAllowed();
   const overview = await getTimeCardManagerOverview(input.customer.id);
 
   if (!overview.entitlement) {
@@ -1268,6 +1271,7 @@ export async function sendTimeCardManagerMissedClockOutEmail(input: {
   locationName?: string;
   shiftDate: string;
 }) {
+  assertTcmDeliveryAllowed();
   const overview = await getTimeCardManagerOverview(input.customer.id);
 
   if (!overview.entitlement) {
