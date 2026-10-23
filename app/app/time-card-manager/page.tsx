@@ -1,5 +1,6 @@
 import { SiteHeader } from "@/components/site-header";
 import {
+  disconnectTimeCardSandboxAction,
   addTimeCardManagerScheduleEntryAction,
   removeTimeCardManagerScheduleEntryAction,
   scanSquareMissedClockOutsAction,
@@ -337,6 +338,21 @@ export default async function TimeCardManagerPage({
                     </p>
                   </article>
 
+                  {process.env.VERCEL_ENV === 'preview' && process.env.SQUARE_ENVIRONMENT === 'sandbox' ? (
+                    <article className="dashboard-subcard">
+                      <h2>Square Sandbox connection</h2>
+                      {params?.saved === 'square_disconnected' ? <p className="form-success">Square disconnected. Saved responses and audit history are preserved.</p> : null}
+                      {params?.error === 'square_disconnect_failed' ? <p className="form-error">Disconnect could not finish. No saved responses were removed. Verify Square access before retrying.</p> : null}
+                      {params?.error === 'disconnect_confirmation' ? <p className="form-error">Confirm the disconnect before continuing.</p> : null}
+                      {squareStatus.connected ? (
+                        <form action={disconnectTimeCardSandboxAction}>
+                          <p>Revoke this Sandbox connection and stop automated runs. Reconnect to restore Square access. Saved responses and audit history remain available.</p>
+                          <label><input name="confirmDisconnect" type="checkbox" required /> I confirm disconnecting this Sandbox connection.</label>
+                          <button className="pill pill-button" type="submit">Disconnect Square Sandbox</button>
+                        </form>
+                      ) : <p>Sandbox is disconnected. Use Connect Square below to reconnect.</p>}
+                    </article>
+                  ) : null}
                   <article className="dashboard-subcard">
                     <div className="subcard-header">
                       <div>

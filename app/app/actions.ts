@@ -1,5 +1,7 @@
 "use server";
 
+import { disconnectTimeCardSandbox } from "@/lib/time-card-disconnect";
+
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
@@ -846,4 +848,17 @@ export async function submitMissingPunchDigestAction(formData: FormData) {
   }
   revalidatePath("/app/time-card-manager/responses");
   redirect(`${responsePath}?saved=response`);
+}
+
+
+export async function disconnectTimeCardSandboxAction(formData: FormData) {
+  const path = '/app/time-card-manager';
+  const session = await requireSession(path);
+  const customer = await getCustomerByUserId(session.user.id);
+  if (!customer || formData.get('confirmDisconnect') !== 'on') redirect(`${path}?error=disconnect_confirmation`);
+  let failed = false;
+  try { await disconnectTimeCardSandbox(customer.id); }
+  catch { failed = true; }
+  revalidatePath(path);
+  redirect(`${path}?${failed ? 'error=square_disconnect_failed' : 'saved=square_disconnected'}`);
 }
