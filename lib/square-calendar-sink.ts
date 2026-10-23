@@ -3,6 +3,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 
 import { getCalendarSinkAccessState } from "@/lib/calendar-sink-access";
+import { ensureCustomerProfilesTable } from "@/lib/customers";
 import { db } from "@/lib/db";
 import {
   getSquareConnectionByCustomerId,
@@ -121,6 +122,8 @@ function buildEmployeeFeeds(input: {
 }
 
 export async function ensureSquareCalendarSinkSettingsTable() {
+  await ensureCustomerProfilesTable();
+
   if (!settingsTableReady) {
     settingsTableReady = db.query(`
       create extension if not exists pgcrypto;
