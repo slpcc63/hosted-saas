@@ -33,3 +33,18 @@ export function getBetterAuthOrigin() {
 
   return getAppOrigin();
 }
+
+export function getBetterAuthTrustedOrigins() {
+  const configuredOrigins = (
+    process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? ""
+  )
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+
+  return [...new Set([
+    getAppOrigin(),
+    getMarketingOrigin(),
+    ...configuredOrigins
+  ])];
+}
