@@ -1,5 +1,7 @@
 import "server-only";
 
+import { databaseDate } from "@/lib/database-date";
+
 import { createHash, randomBytes } from "node:crypto";
 
 import { db } from "@/lib/db";
@@ -238,13 +240,13 @@ function mapRequest(row: Record<string, unknown>): TimeCardConfirmationRequest {
     squareTeamMemberId: String(row.square_team_member_id),
     employeeName: String(row.employee_name),
     employeeEmail: String(row.employee_email),
-    periodStart: String(row.period_start).slice(0, 10),
-    periodEnd: String(row.period_end).slice(0, 10),
+    periodStart: databaseDate(row.period_start),
+    periodEnd: databaseDate(row.period_end),
     timezone: String(row.timezone),
     status: String(row.status) as TimeCardConfirmationStatus,
     responseCode,
     reportedShiftDate: row.reported_shift_date
-      ? String(row.reported_shift_date).slice(0, 10)
+      ? databaseDate(row.reported_shift_date)
       : null,
     reportedTimeIn: typeof row.reported_time_in === "string" ? row.reported_time_in : null,
     reportedTimeOut: typeof row.reported_time_out === "string" ? row.reported_time_out : null,
@@ -786,8 +788,8 @@ export async function getTimeCardConfirmationRuns(customerId: string, limit = 12
   return result.rows.map((row) => ({
     id: String(row.id),
     customerId: String(row.customer_id),
-    periodStart: String(row.period_start).slice(0, 10),
-    periodEnd: String(row.period_end).slice(0, 10),
+    periodStart: databaseDate(row.period_start),
+    periodEnd: databaseDate(row.period_end),
     status: String(row.status),
     sentCount: Number(row.sent_count),
     skippedCount: Number(row.skipped_count),
