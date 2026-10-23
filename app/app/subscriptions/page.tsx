@@ -1,7 +1,5 @@
 import { SiteHeader } from "@/components/site-header";
 import {
-  cancelSubscriptionAction,
-  changeSubscriptionPlanAction,
   openBillingPortalAction,
   subscribeToPlanAction
 } from "@/app/app/actions";
@@ -48,23 +46,11 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
             {params?.saved === "subscription" ? (
               <p className="form-success">Subscription started successfully.</p>
             ) : null}
-            {params?.saved === "plan_changed" ? (
-              <p className="form-success">Subscription plan updated successfully.</p>
-            ) : null}
-            {params?.saved === "canceled" ? (
-              <p className="form-success">Subscription canceled successfully.</p>
-            ) : null}
             {params?.error === "plan_required" ? (
               <p className="form-error">Choose a plan before subscribing.</p>
             ) : null}
-            {params?.error === "plan_change_invalid" ? (
-              <p className="form-error">Choose a valid plan to update this subscription.</p>
-            ) : null}
-            {params?.error === "subscription_missing" ? (
-              <p className="form-error">That subscription could not be found.</p>
-            ) : null}
             {params?.error === "stripe_not_configured" ? (
-              <p className="form-error">Stripe is not configured yet for hosted billing.</p>
+              <p className="form-error">Hosted checkout is unavailable. No subscription was created.</p>
             ) : null}
             {params?.error === "stripe_customer_missing" ? (
               <p className="form-error">Stripe customer setup is still missing for this account.</p>
@@ -122,31 +108,6 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
                           Manage time card notifications
                         </a>
                       ) : null}
-                      {availablePlans
-                        .filter(
-                          (plan) =>
-                            plan.productId === subscription.productId &&
-                            plan.planId !== subscription.planId
-                        )
-                        .map((plan) => (
-                          <form action={changeSubscriptionPlanAction} className="inline-form" key={plan.planId}>
-                            <input name="redirectTo" type="hidden" value={redirectTo} />
-                            <input name="subscriptionId" type="hidden" value={subscription.id} />
-                            <input name="planId" type="hidden" value={plan.planId} />
-                            <button className="pill pill-button" type="submit">
-                              Switch to {plan.planName}
-                            </button>
-                          </form>
-                        ))}
-                      {subscription.status !== "canceled" ? (
-                        <form action={cancelSubscriptionAction} className="inline-form">
-                          <input name="redirectTo" type="hidden" value={redirectTo} />
-                          <input name="subscriptionId" type="hidden" value={subscription.id} />
-                          <button className="pill pill-button" type="submit">
-                            Cancel subscription
-                          </button>
-                        </form>
-                      ) : null}
                     </div>
                   </article>
                 ))}
@@ -160,9 +121,18 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
                   Manage billing in Stripe
                 </button>
               </form>
+            ) : subscriptions.length > 0 ? (
+              <p className="auth-helper" role="status">
+                Plan changes and cancellations are unavailable until the secure billing portal is configured.
+              </p>
             ) : null}
 
             <div className="stack-list">
+              {!stripeEnabled ? (
+                <p className="auth-helper" role="status">
+                  Plans are visible for assisted demonstrations, but checkout is disabled until hosted billing is configured and accepted.
+                </p>
+              ) : null}
               {availablePlans.map((plan) => {
                 const alreadySubscribed = activeProductIds.has(plan.productId);
 
@@ -197,10 +167,14 @@ export default async function SubscriptionsPage({ searchParams }: SubscriptionsP
                       <input name="planId" type="hidden" value={plan.planId} />
                       <button
                         className="pill primary pill-button"
-                        disabled={alreadySubscribed}
+                        disabled={alreadySubscribed || !stripeEnabled}
                         type="submit"
                       >
-                        {alreadySubscribed ? "Already subscribed" : `Subscribe to ${plan.planName}`}
+                        {alreadySubscribed
+                          ? "Already subscribed"
+                          : stripeEnabled
+                            ? `Subscribe to ${plan.planName}`
+                            : "Checkout unavailable"}
                       </button>
                     </form>
                   </article>

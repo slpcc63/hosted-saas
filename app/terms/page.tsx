@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SiteHeader } from "@/components/site-header";
+import { PublicSiteHeader } from "@/components/public-site-header";
 
 export const metadata: Metadata = {
   title: "SMS Terms | SLPCC63 Time Card Manager",
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 export default function SmsTermsPage() {
   return (
     <>
-      <SiteHeader />
+      <PublicSiteHeader />
       <main className="shell legal-page">
         <article className="legal-card">
           <div className="eyebrow">Effective August 24, 2026</div>

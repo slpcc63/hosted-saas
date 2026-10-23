@@ -1746,3 +1746,32 @@ textarea {
     width: 100%;
   }
 }
+
+/* Public suite pages; scoped to preserve installed management tools. */
+.main-site { padding-bottom: 4rem; }
+.main-site section, .suite-product { scroll-margin-top: 7rem; }
+.suite-intro { padding: 5rem 0 4rem; max-width: 850px; }
+.suite-intro h1 { font-size: clamp(2.5rem, 5.5vw, 4.5rem); line-height: 1.08; letter-spacing: -.045em; margin: 1rem 0 1.5rem; }
+.main-site p { line-height: 1.7; }
+.suite-lead { font-size: 1.35rem; max-width: 700px; }
+.suite-actions { display: flex; flex-wrap: wrap; gap: .8rem; margin-top: 1.8rem; }
+.main-site h2 { font-size: clamp(1.8rem, 3vw, 2.5rem); max-width: 800px; letter-spacing: -.025em; }
+.suite-product { display: grid; grid-template-columns: 1fr 1.2fr; gap: 4rem; padding: 3rem 0; border-top: 1px solid var(--border-strong); }
+.suite-product h3 { font-size: 2rem; margin: .75rem 0; }
+.suite-benefit { font-size: 1.3rem; }
+.suite-audience { color: var(--muted); margin-bottom: 1.7rem; }
+.suite-details h4 { margin: 1.4rem 0 .3rem; font-size: 1rem; }
+.suite-details p { margin: 0; }
+.suite-section { padding: 2.5rem 0; border-top: 1px solid var(--border-strong); }
+.suite-access { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
+.suite-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 1.5rem; padding: 2rem 0; border-top: 1px solid var(--border); font-size: .9rem; }
+.suite-footer span { margin-right: auto; }
+.main-site .pill { white-space: normal; text-align: center; }
+.main-site a:focus-visible, .suite-footer a:focus-visible { outline: 3px solid #2b6cb0; outline-offset: 5px; }
+@media (max-width: 700px) {
+  .suite-intro { padding: 3rem 0; }
+  .suite-product, .suite-access { grid-template-columns: minmax(0, 1fr); gap: 1.8rem; }
+  .suite-product { padding: 2rem 0; }
+  .suite-actions { align-items: stretch; flex-direction: column; }
+  .suite-footer span { width: 100%; }
+}

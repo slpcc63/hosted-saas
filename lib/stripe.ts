@@ -5,6 +5,8 @@ import { getAppOrigin } from "@/lib/deployment";
 export type StripeCheckoutSession = {
   customer: string | null;
   id: string;
+  payment_status: string | null;
+  status: string | null;
   subscription: string | null;
   url: string | null;
 };
@@ -25,7 +27,7 @@ function getStripeSecretKey() {
 }
 
 export function isStripeConfigured() {
-  return Boolean(getStripeSecretKey());
+  return Boolean(getStripeSecretKey()) && process.env.BILLING_CHECKOUT_ENABLED === "true";
 }
 
 async function stripeRequest<T>(path: string, init?: RequestInit) {
