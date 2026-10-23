@@ -349,3 +349,22 @@ test("employee setup page keeps accurate Apple and Google actions and paused wor
   assert.match(pageSource, /This calendar is paused/);
   assert.match(pageSource, /No SLPCC63\s*account or sign-in is required/);
 });
+
+test("Calendar Sync initializes customer profiles before its foreign-key tables", async () => {
+  const source = await readFile(
+    new URL("../lib/square-calendar-sink.ts", import.meta.url),
+    "utf8"
+  );
+  const initializerStart = source.indexOf(
+    "export async function ensureSquareCalendarSinkSettingsTable()"
+  );
+  const customerProfilesCall = source.indexOf(
+    "await ensureCustomerProfilesTable();",
+    initializerStart
+  );
+  const calendarTablesCall = source.indexOf("settingsTableReady = db.query", initializerStart);
+
+  assert.ok(initializerStart >= 0);
+  assert.ok(customerProfilesCall > initializerStart);
+  assert.ok(calendarTablesCall > customerProfilesCall);
+});
