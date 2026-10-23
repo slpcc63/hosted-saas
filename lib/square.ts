@@ -1,5 +1,7 @@
 import "server-only";
 
+import { squareCallbackUrl } from "@/lib/square-callback";
+
 import { collectSquarePages } from "@/lib/square-pagination";
 import { classifySquareRevocationResponse } from "@/lib/square-disconnect";
 
@@ -34,10 +36,7 @@ export function getSquareAppSecret() {
 }
 
 export function getSquareRedirectUri() {
-  return (
-    process.env.SQUARE_REDIRECT_URI ??
-    "https://hosted-saas.vercel.app/api/integrations/square/callback"
-  );
+  return squareCallbackUrl(process.env);
 }
 
 export function getSquareScopes() {
