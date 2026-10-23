@@ -12,7 +12,7 @@ type AuthFormProps = {
 };
 
 export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-up");
+  const [mode] = useState<"sign-in" | "sign-up">("sign-in");
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -103,30 +103,7 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
         </>
       ) : null}
 
-      <div className="auth-toggle">
-        <button
-          className={`pill-button auth-toggle-button${mode === "sign-up" ? " active" : ""}`}
-          onClick={() => {
-            setMode("sign-up");
-            setError(null);
-            setStatusMessage(null);
-          }}
-          type="button"
-        >
-          Create account
-        </button>
-        <button
-          className={`pill-button auth-toggle-button${mode === "sign-in" ? " active" : ""}`}
-          onClick={() => {
-            setMode("sign-in");
-            setError(null);
-            setStatusMessage(null);
-          }}
-          type="button"
-        >
-          Sign in
-        </button>
-      </div>
+      <p className="auth-helper">Access is arranged with SLPCC63 support. Employees should use their employer-provided private link.</p>
 
       <form className="auth-form" onSubmit={handleSubmit}>
         {mode === "sign-up" ? (

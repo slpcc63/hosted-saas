@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 import { getOrCreateCustomerProfile } from "@/lib/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { SquarePluginId, squarePluginIds } from "@/lib/square-plugin-installations";
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const session = await auth.api.getSession({
+  const session = await getAuth().api.getSession({
     headers: await headers()
   });
 

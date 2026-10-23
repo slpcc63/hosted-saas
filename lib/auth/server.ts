@@ -3,11 +3,12 @@ import "server-only";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-import { auth } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 
 export async function getServerSession() {
-  const session = await auth.api.getSession({
-    headers: await headers()
+  const requestHeaders = await headers();
+  const session = await getAuth().api.getSession({
+    headers: requestHeaders
   });
 
   return session;

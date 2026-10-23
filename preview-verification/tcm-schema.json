@@ -1,0 +1,80 @@
+{
+  "checks": [
+    "ensureTimeCardManagerSettingsTable",
+    "ensureTimeCardManagerScheduleTable",
+    "ensureTimeCardManagerUsageTable",
+    "ensureTimeCardManagerAutomationRunsTable",
+    "ensureTimeCardManagerAlertLogTable"
+  ],
+  "tables": [
+    {
+      "tablename": "account"
+    },
+    {
+      "tablename": "customer_profiles"
+    },
+    {
+      "tablename": "plans"
+    },
+    {
+      "tablename": "products"
+    },
+    {
+      "tablename": "session"
+    },
+    {
+      "tablename": "square_connections"
+    },
+    {
+      "tablename": "square_time_card_manager_alert_log"
+    },
+    {
+      "tablename": "square_time_card_manager_automation_runs"
+    },
+    {
+      "tablename": "square_time_card_manager_schedule_entries"
+    },
+    {
+      "tablename": "square_time_card_manager_settings"
+    },
+    {
+      "tablename": "square_time_card_manager_text_usage"
+    },
+    {
+      "tablename": "subscriptions"
+    },
+    {
+      "tablename": "time_card_confirmation_audit_events"
+    },
+    {
+      "tablename": "time_card_confirmation_requests"
+    },
+    {
+      "tablename": "time_card_confirmation_runs"
+    },
+    {
+      "tablename": "time_card_confirmation_settings"
+    },
+    {
+      "tablename": "time_card_employee_contacts"
+    },
+    {
+      "tablename": "time_card_missing_punch_digest_items"
+    },
+    {
+      "tablename": "time_card_missing_punch_digests"
+    },
+    {
+      "tablename": "time_card_missing_punches"
+    },
+    {
+      "tablename": "time_card_sms_messages"
+    },
+    {
+      "tablename": "user"
+    },
+    {
+      "tablename": "verification"
+    }
+  ]
+}

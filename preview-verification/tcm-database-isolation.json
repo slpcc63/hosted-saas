@@ -1,0 +1,9 @@
+{
+  "independentNeonProject": "polished-river-37255905",
+  "differentEndpoint": true,
+  "productionAuthenticationRejected": true,
+  "productionErrorCode": "28P01",
+  "previewConnectionSucceeded": true,
+  "database": "neondb",
+  "role": "neondb_owner"
+}

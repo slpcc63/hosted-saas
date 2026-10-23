@@ -10,10 +10,12 @@
     "test:calendar-sync": "node --no-warnings --experimental-strip-types --test tests/calendar-sync.test.mts",
     "test:time-card": "node --no-warnings --experimental-strip-types --test tests/time-card-response-parser.test.mts",
     "test:missing-punch": "node --no-warnings --experimental-strip-types --test tests/time-card-missing-punch.test.mts",
-    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:public",
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:public && npm run test:auth && npm run test:db",
     "typecheck": "next typegen && tsc --noEmit",
     "build:public": "node scripts/build-public-site.mjs",
-    "test:public": "node --test tests/public-site-artifact.test.mjs"
+    "test:public": "node --test tests/public-site-artifact.test.mjs",
+    "test:auth": "node --no-warnings --experimental-strip-types --test tests/auth-config.test.mts",
+    "test:db": "node --no-warnings --experimental-strip-types --test tests/db-config.test.mts"
   },
   "dependencies": {
     "@types/pg": "^8.20.0",

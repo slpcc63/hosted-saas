@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 
-import { auth } from "@/lib/auth";
+import { getAuth } from "@/lib/auth";
 import { getCustomerByUserId } from "@/lib/customers";
 import { getTimeCardConfirmationRequests } from "@/lib/time-card-email-workflow";
 import {
@@ -12,7 +12,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getAuth().api.getSession({ headers: await headers() });
 
   if (!session?.user) {
     return Response.json({ ok: false, error: "Unauthorized" }, { status: 401 });
