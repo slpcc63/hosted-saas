@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 
+import { getCalendarSinkAccessState } from "@/lib/calendar-sink-access";
 import { getSquareCalendarSinkSubscription } from "@/lib/square-calendar-sink";
 import { CopyFeedButton } from "./copy-feed-button";
 
@@ -23,7 +24,9 @@ export default async function EmployeeSubscriptionPage({ params }: EmployeeSubsc
     headers()
   ]);
 
-  if (!settings) {
+  const accessState = getCalendarSinkAccessState(settings);
+
+  if (accessState === "not_found" || !settings) {
     notFound();
   }
 
@@ -37,38 +40,66 @@ export default async function EmployeeSubscriptionPage({ params }: EmployeeSubsc
       <a className="brand" href="https://slpcc63.com">SLPCC63</a>
       <section className="dashboard-card calendar-employee-subscription-card">
         <div className="eyebrow">Square Calendar Sync</div>
-        {settings.enabled ? (
+        {accessState === "active" ? (
           <>
             <h1>Add your work schedule</h1>
             <p>
-              Subscribe once to <strong>{settings.calendarName}</strong>. Published Square schedule
-              changes will appear automatically when your calendar refreshes.
+              Your employer created <strong>{settings.calendarName}</strong> for you. No SLPCC63
+              account or sign-in is required.
             </p>
+
+            <ul className="calendar-setup-facts">
+              <li>Set it up once; your calendar provider refreshes it automatically.</li>
+              <li>Only shifts your employer has published in Square appear.</li>
+              <li>Updates are automatic, but they may not appear immediately.</li>
+            </ul>
 
             <div className="calendar-private-note">
               <strong>This page is private.</strong>
               <span>Do not forward it. Anyone with this page can access your work schedule.</span>
             </div>
 
-            <div className="calendar-employee-subscription-actions">
-              <a className="pill primary" href={webcalUrl}>Add to Apple Calendar</a>
-              <a
-                className="pill"
-                href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Open Google Calendar
-              </a>
-              <CopyFeedButton feedUrl={feedUrl} />
-              <a className="pill" href={feedUrl} target="_blank" rel="noreferrer">Open raw ICS feed</a>
+            <div className="calendar-provider-options">
+              <section className="calendar-provider-option calendar-provider-primary">
+                <p className="calendar-provider-label">Apple Calendar</p>
+                <h2>One-tap setup</h2>
+                <p>Open the subscription prompt, confirm the calendar, and save it.</p>
+                <a className="pill primary" href={webcalUrl}>Add to Apple Calendar</a>
+              </section>
+
+              <section className="calendar-provider-option">
+                <p className="calendar-provider-label">Google Calendar</p>
+                <h2>Use a computer browser</h2>
+                <p>
+                  The Google Calendar mobile app cannot add a calendar subscription directly.
+                  On a computer, copy this address and add it under Other calendars → From URL.
+                </p>
+                <div className="calendar-employee-subscription-actions">
+                  <CopyFeedButton feedUrl={feedUrl} />
+                  <a
+                    className="pill"
+                    href="https://calendar.google.com/calendar/u/0/r/settings/addbyurl"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Open Google Calendar on a computer
+                  </a>
+                </div>
+              </section>
             </div>
 
-            <ol className="calendar-subscribe-steps calendar-employee-instructions">
-              <li><strong>Apple:</strong> choose Add to Apple Calendar, save to iCloud, and set Auto-refresh to every 5 minutes.</li>
-              <li><strong>Google:</strong> copy the calendar address, open Google Calendar, then choose Other calendars → From URL.</li>
-              <li>Make schedule changes in Square. This subscribed calendar is read-only.</li>
-            </ol>
+            <p className="calendar-read-only-note">
+              This calendar is read-only. Your employer continues to publish schedule changes in Square.
+            </p>
+
+            <details className="calendar-other-apps">
+              <summary>Other calendar apps</summary>
+              <p>Copy the private calendar address into an app that supports subscribed ICS calendars.</p>
+              <div className="calendar-employee-subscription-actions">
+                <CopyFeedButton feedUrl={feedUrl} label="Copy private calendar address" />
+                <a className="pill" href={feedUrl} target="_blank" rel="noreferrer">Open calendar file</a>
+              </div>
+            </details>
           </>
         ) : (
           <div className="calendar-subscription-paused">

@@ -1,8 +1,25 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
+import { getCalendarSinkAccessState } from "../lib/calendar-sink-access.ts";
+import { getCalendarSinkDeliveryPlan } from "../lib/calendar-sink-delivery-plan.ts";
+import { getCalendarSinkEmailIdempotencyKey } from "../lib/calendar-sink-delivery-identity.ts";
+import { getPrivateCalendarCacheHeaders } from "../lib/calendar-sink-cache.ts";
 import { buildSquareShiftCalendar } from "../lib/icalendar.ts";
 import { collectSquarePages } from "../lib/square-pagination.ts";
+import {
+  classifySquareRevocationResponse,
+  disconnectSquareAuthorization
+} from "../lib/square-disconnect.ts";
+import {
+  decryptSquareToken,
+  encryptSquareConnectionTokens,
+  encryptSquareToken,
+  SquareTokenEncryptionError
+} from "../lib/square-token-crypto.ts";
+
+const encryptionKey = Buffer.alloc(32, 7).toString("base64");
 
 const primaryShift = {
   id: "SHIFT_A",
@@ -105,4 +122,230 @@ test("Square pagination follows cursors and combines every page", async () => {
 
   assert.deepEqual(requestedCursors, [undefined, "page-2"]);
   assert.deepEqual(items, ["SHIFT_A", "SHIFT_B", "SHIFT_C"]);
+});
+
+test("initial calendar invitation retries retain their feed idempotency identity", () => {
+  assert.equal(
+    getCalendarSinkEmailIdempotencyKey({
+      attemptId: "ignored",
+      feedId: "FEED_A",
+      kind: "initial"
+    }),
+    "calendar-sink-created-FEED_A"
+  );
+});
+
+test("each resend attempt receives a new idempotency identity", () => {
+  const first = getCalendarSinkEmailIdempotencyKey({
+    attemptId: "ATTEMPT_A",
+    feedId: "FEED_A",
+    kind: "resend"
+  });
+  const second = getCalendarSinkEmailIdempotencyKey({
+    attemptId: "ATTEMPT_B",
+    feedId: "FEED_A",
+    kind: "resend"
+  });
+
+  assert.equal(first, "calendar-sink-resend-FEED_A-ATTEMPT_A");
+  assert.equal(second, "calendar-sink-resend-FEED_A-ATTEMPT_B");
+  assert.notEqual(first, second);
+});
+
+test("Square OAuth tokens use authenticated versioned encryption", () => {
+  const encrypted = encryptSquareToken({
+    customerId: "CUSTOMER_A",
+    encodedKey: encryptionKey,
+    token: "test-access-value",
+    tokenKind: "access"
+  });
+
+  assert.match(encrypted, /^sqtoken:v1:/);
+  assert.doesNotMatch(encrypted, /test-access-value/);
+  assert.deepEqual(
+    decryptSquareToken({
+      customerId: "CUSTOMER_A",
+      encodedKey: encryptionKey,
+      storedToken: encrypted,
+      tokenKind: "access"
+    }),
+    { token: "test-access-value", needsRewrite: false }
+  );
+});
+
+test("legacy Square tokens are identified and can be rewritten without outputting their values", () => {
+  const legacy = decryptSquareToken({
+    customerId: "CUSTOMER_A",
+    encodedKey: encryptionKey,
+    storedToken: "legacy-test-value",
+    tokenKind: "refresh"
+  });
+  const rewritten = encryptSquareToken({
+    customerId: "CUSTOMER_A",
+    encodedKey: encryptionKey,
+    token: legacy.token,
+    tokenKind: "refresh"
+  });
+
+  assert.equal(legacy.needsRewrite, true);
+  assert.match(rewritten, /^sqtoken:v1:/);
+  assert.doesNotMatch(rewritten, /legacy-test-value/);
+});
+
+test("refreshed Square access and refresh tokens are both prepared for encrypted persistence", () => {
+  const encrypted = encryptSquareConnectionTokens({
+    accessToken: "refreshed-access-value",
+    customerId: "CUSTOMER_A",
+    encodedKey: encryptionKey,
+    refreshToken: "refreshed-refresh-value"
+  });
+
+  assert.match(encrypted.accessToken, /^sqtoken:v1:/);
+  assert.match(encrypted.refreshToken, /^sqtoken:v1:/);
+  assert.doesNotMatch(JSON.stringify(encrypted), /refreshed-(access|refresh)-value/);
+});
+
+test("invalid Square ciphertext and a missing encryption key fail without exposing token material", () => {
+  assert.throws(
+    () => decryptSquareToken({
+      customerId: "CUSTOMER_A",
+      encodedKey: encryptionKey,
+      storedToken: "sqtoken:v1:invalid:invalid:invalid",
+      tokenKind: "access"
+    }),
+    (error: unknown) => error instanceof SquareTokenEncryptionError &&
+      error.message === "Square token ciphertext is invalid."
+  );
+  assert.throws(
+    () => encryptSquareToken({
+      customerId: "CUSTOMER_A",
+      encodedKey: "",
+      token: "test-secret-value",
+      tokenKind: "access"
+    }),
+    (error: unknown) => error instanceof SquareTokenEncryptionError &&
+      error.message === "Square token encryption key is not configured."
+  );
+  assert.throws(
+    () => decryptSquareToken({
+      customerId: "CUSTOMER_A",
+      encodedKey: encryptionKey,
+      storedToken: "sqtoken:v2:future-envelope",
+      tokenKind: "access"
+    }),
+    (error: unknown) => error instanceof SquareTokenEncryptionError &&
+      error.message === "Square token ciphertext version is unsupported."
+  );
+});
+
+test("Square disconnect finalizes locally only after revocation is accepted", async () => {
+  const events: string[] = [];
+  const result = await disconnectSquareAuthorization({
+    getConnection: async () => ({ id: "CONNECTION_A", accessToken: "test-access-value" }),
+    revokeAccess: async () => {
+      events.push("revoked");
+      return "already_inactive";
+    },
+    finalizeLocalDisconnect: async (connectionId) => {
+      events.push(`finalized:${connectionId}`);
+    }
+  });
+
+  assert.equal(result, "already_disconnected");
+  assert.deepEqual(events, ["revoked", "finalized:CONNECTION_A"]);
+
+  await assert.rejects(
+    disconnectSquareAuthorization({
+      getConnection: async () => ({ id: "CONNECTION_B", accessToken: "test-access-value" }),
+      revokeAccess: async () => { throw new Error("revocation unavailable"); },
+      finalizeLocalDisconnect: async () => { events.push("must-not-finalize"); }
+    })
+  );
+  assert.doesNotMatch(events.join(","), /must-not-finalize/);
+});
+
+test("private calendar responses disable browser and shared CDN caching", () => {
+  const headers = getPrivateCalendarCacheHeaders();
+  const serialized = JSON.stringify(headers);
+
+  assert.equal(headers["Cache-Control"], "private, no-store, max-age=0");
+  assert.equal(headers["CDN-Cache-Control"], "no-store");
+  assert.equal(headers["Vercel-CDN-Cache-Control"], "no-store");
+  assert.doesNotMatch(serialized, /public|s-maxage|stale-while-revalidate/);
+});
+
+test("calendar delivery planning covers initial email, manual delivery, and missing email", () => {
+  assert.deepEqual(
+    getCalendarSinkDeliveryPlan({
+      emailAddress: " Employee@Example.com ",
+      feedToken: "FEED_A",
+      mode: "email",
+      setupBaseUrl: "https://app.example.test/calendar-sink/subscribe/"
+    }),
+    {
+      channel: "email",
+      recipient: "employee@example.com",
+      setupUrl: "https://app.example.test/calendar-sink/subscribe/FEED_A",
+      status: "ready"
+    }
+  );
+  assert.equal(
+    getCalendarSinkDeliveryPlan({
+      feedToken: "FEED_A",
+      mode: "email",
+      setupBaseUrl: "https://app.example.test/calendar-sink/subscribe"
+    }).status,
+    "needs_contact"
+  );
+  assert.equal(
+    getCalendarSinkDeliveryPlan({
+      emailAddress: "employee@example.com",
+      feedToken: "FEED_A",
+      mode: "manual",
+      setupBaseUrl: "https://app.example.test/calendar-sink/subscribe"
+    }).status,
+    "manual"
+  );
+});
+
+test("paused, deleted, and rotated-away feeds are unavailable", () => {
+  assert.equal(getCalendarSinkAccessState({ enabled: true }), "active");
+  assert.equal(getCalendarSinkAccessState({ enabled: false }), "paused");
+  assert.equal(getCalendarSinkAccessState(null), "not_found");
+});
+
+test("Square revocation treats revoked and invalid credentials as safe terminal results", () => {
+  assert.equal(
+    classifySquareRevocationResponse({ ok: true, status: 200, success: true }),
+    "revoked"
+  );
+  assert.equal(
+    classifySquareRevocationResponse({
+      errorCodes: ["ACCESS_TOKEN_REVOKED"],
+      ok: false,
+      status: 400
+    }),
+    "already_inactive"
+  );
+  assert.equal(
+    classifySquareRevocationResponse({ ok: false, status: 401 }),
+    "already_inactive"
+  );
+  assert.equal(
+    classifySquareRevocationResponse({ ok: false, status: 500 }),
+    null
+  );
+});
+
+test("employee setup page keeps accurate Apple and Google actions and paused wording", async () => {
+  const pageSource = await readFile(
+    new URL("../app/app/calendar-sink/subscribe/[token]/page.tsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(pageSource, /Add to Apple Calendar/);
+  assert.match(pageSource, /Use a computer browser/);
+  assert.match(pageSource, /Other calendars → From URL/);
+  assert.match(pageSource, /This calendar is paused/);
+  assert.match(pageSource, /No SLPCC63\s*account or sign-in is required/);
 });

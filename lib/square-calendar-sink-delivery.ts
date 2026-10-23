@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  getCalendarSinkEmailIdempotencyKey,
+  type CalendarSinkEmailDeliveryKind
+} from "@/lib/calendar-sink-delivery-identity";
+import { getCalendarSinkDeliveryPlan } from "@/lib/calendar-sink-delivery-plan";
 import type { CustomerProfile } from "@/lib/customers";
 import { getDefaultManagedSenderEmail, sendTransactionalEmail } from "@/lib/email";
 import {
@@ -49,6 +54,7 @@ function emptyResult(createdCount: number): CalendarSinkDistributionResult {
 export async function distributeSquareCalendarSinkFeeds(input: {
   created: CreatedCalendarFeed[];
   customer: Pick<CustomerProfile, "companyName" | "contactName" | "email" | "id">;
+  deliveryKind?: CalendarSinkEmailDeliveryKind;
   mode: CalendarSinkDistributionMode;
   setupBaseUrl: string;
 }) {
@@ -57,7 +63,14 @@ export async function distributeSquareCalendarSinkFeeds(input: {
   const senderName = `${companyName} via SLPCC63`;
 
   for (const { feed, teamMember } of input.created) {
-    if (input.mode === "manual") {
+    const plan = getCalendarSinkDeliveryPlan({
+      emailAddress: teamMember.email_address,
+      feedToken: feed.feedToken,
+      mode: input.mode,
+      setupBaseUrl: input.setupBaseUrl
+    });
+
+    if (plan.status === "manual") {
       await recordSquareCalendarSinkDelivery({
         channel: "manual",
         customerId: input.customer.id,
@@ -68,8 +81,7 @@ export async function distributeSquareCalendarSinkFeeds(input: {
       continue;
     }
 
-    const recipient = teamMember.email_address?.trim().toLowerCase() || null;
-    if (!recipient) {
+    if (plan.status === "needs_contact") {
       await recordSquareCalendarSinkDelivery({
         channel: "email",
         customerId: input.customer.id,
@@ -81,7 +93,8 @@ export async function distributeSquareCalendarSinkFeeds(input: {
     }
 
     const employeeName = getTeamMemberName(teamMember);
-    const setupUrl = `${input.setupBaseUrl.replace(/\/$/, "")}/${feed.feedToken}`;
+    const recipient = plan.recipient;
+    const setupUrl = plan.setupUrl;
     const subject = `${companyName}: add your work schedule`;
     const html = `
       <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #1f2933;">
@@ -91,6 +104,7 @@ export async function distributeSquareCalendarSinkFeeds(input: {
           ${escapeHtml(companyName)} created a private, read-only calendar for your
           published Square shifts.
         </p>
+        <p>You do not need an SLPCC63 account. Open the page and set up your calendar once.</p>
         <p>
           <a href="${escapeHtml(setupUrl)}" style="display: inline-block; padding: 12px 18px; border-radius: 999px; background: #111111; color: #ffffff; text-decoration: none;">
             Open your private setup page
@@ -104,6 +118,7 @@ export async function distributeSquareCalendarSinkFeeds(input: {
       `Hello ${employeeName},`,
       "",
       `${companyName} created a private, read-only calendar for your published Square shifts.`,
+      "You do not need an SLPCC63 account. Open the page and set up your calendar once.",
       "",
       `Open your private setup page: ${setupUrl}`,
       "",
@@ -116,7 +131,10 @@ export async function distributeSquareCalendarSinkFeeds(input: {
         fromEmail: getDefaultManagedSenderEmail(),
         fromName: senderName,
         html,
-        idempotencyKey: `calendar-sink-created-${feed.id}`,
+        idempotencyKey: getCalendarSinkEmailIdempotencyKey({
+          feedId: feed.id,
+          kind: input.deliveryKind ?? "initial"
+        }),
         replyTo: input.customer.email,
         subject,
         text,

@@ -1,3 +1,4 @@
+import { getPrivateCalendarCacheHeaders } from "@/lib/calendar-sink-cache";
 import { buildSquareShiftCalendar } from "@/lib/icalendar";
 import { getSquareCalendarSinkFeed } from "@/lib/square-calendar-sink";
 
@@ -15,7 +16,7 @@ export async function GET(
     if (!feed) {
       return new Response("Calendar not found", {
         status: 404,
-        headers: { "Cache-Control": "no-store", "X-Robots-Tag": "noindex" }
+        headers: getPrivateCalendarCacheHeaders()
       });
     }
 
@@ -33,26 +34,26 @@ export async function GET(
         status: 304,
         headers: {
           ETag: calendar.etag,
-          "Vercel-CDN-Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600"
+          ...getPrivateCalendarCacheHeaders()
         }
       });
     }
 
     return new Response(calendar.body, {
       headers: {
-        "Cache-Control": "private, max-age=300, stale-while-revalidate=3600",
         "Content-Disposition": `inline; filename="${encodeURIComponent(feed.settings.calendarName)}.ics"`,
         "Content-Type": "text/calendar; charset=utf-8",
         ETag: calendar.etag,
-        "Vercel-CDN-Cache-Control": "public, s-maxage=900, stale-while-revalidate=3600",
-        "X-Robots-Tag": "noindex"
+        ...getPrivateCalendarCacheHeaders()
       }
     });
   } catch (error) {
-    console.error("Square Calendar Sync feed failed", error);
+    console.error("Square Calendar Sync feed failed", {
+      error: error instanceof Error ? error.message : "Unknown feed error"
+    });
     return new Response("Calendar temporarily unavailable", {
       status: 503,
-      headers: { "Cache-Control": "no-store", "Retry-After": "60", "X-Robots-Tag": "noindex" }
+      headers: { ...getPrivateCalendarCacheHeaders(), "Retry-After": "60" }
     });
   }
 }

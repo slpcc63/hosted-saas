@@ -7,6 +7,10 @@ import {
   refreshSquareAuthorization,
   retrieveSquareTokenStatus
 } from "@/lib/square";
+import {
+  decryptSquareToken,
+  encryptSquareConnectionTokens
+} from "@/lib/square-token-crypto";
 
 export type SquareConnection = {
   accessToken: string;
@@ -31,18 +35,71 @@ function parseScopes(value: unknown) {
   return [];
 }
 
-function mapSquareConnection(row: Record<string, unknown>): SquareConnection {
+function decodeSquareConnection(row: Record<string, unknown>) {
+  const customerId = String(row.customer_id);
+  const accessToken = decryptSquareToken({
+    customerId,
+    storedToken: String(row.access_token),
+    tokenKind: "access"
+  });
+  const refreshToken = decryptSquareToken({
+    customerId,
+    storedToken: String(row.refresh_token),
+    tokenKind: "refresh"
+  });
+
   return {
-    id: String(row.id),
-    customerId: String(row.customer_id),
-    merchantId: String(row.merchant_id),
-    accessToken: String(row.access_token),
-    refreshToken: String(row.refresh_token),
-    expiresAt: row.expires_at ? new Date(String(row.expires_at)) : null,
-    squareEnvironment: String(row.square_environment),
-    authorizedScopes: parseScopes(row.authorized_scopes),
-    connectedAt: new Date(String(row.connected_at)),
-    updatedAt: new Date(String(row.updated_at))
+    connection: {
+      id: String(row.id),
+      customerId,
+      merchantId: String(row.merchant_id),
+      accessToken: accessToken.token,
+      refreshToken: refreshToken.token,
+      expiresAt: row.expires_at ? new Date(String(row.expires_at)) : null,
+      squareEnvironment: String(row.square_environment),
+      authorizedScopes: parseScopes(row.authorized_scopes),
+      connectedAt: new Date(String(row.connected_at)),
+      updatedAt: new Date(String(row.updated_at))
+    } satisfies SquareConnection,
+    needsRewrite: accessToken.needsRewrite || refreshToken.needsRewrite
+  };
+}
+
+async function mapAndRewriteSquareConnection(row: Record<string, unknown>) {
+  const decoded = decodeSquareConnection(row);
+
+  if (!decoded.needsRewrite) {
+    return decoded.connection;
+  }
+
+  const encrypted = encryptSquareConnectionTokens({
+    accessToken: decoded.connection.accessToken,
+    customerId: decoded.connection.customerId,
+    refreshToken: decoded.connection.refreshToken
+  });
+  const result = await db.query(
+    `update public.square_connections
+     set access_token = $2,
+         refresh_token = $3,
+         updated_at = now()
+     where id = $1
+       and access_token = $4
+       and refresh_token = $5
+     returning updated_at`,
+    [
+      decoded.connection.id,
+      encrypted.accessToken,
+      encrypted.refreshToken,
+      String(row.access_token),
+      String(row.refresh_token)
+    ]
+  );
+
+  return {
+    ...decoded.connection,
+    updatedAt: result.rows[0]
+      ? new Date(String(result.rows[0].updated_at))
+      : decoded.connection.updatedAt
   };
 }
 
@@ -108,7 +165,7 @@ export async function getSquareConnectionByCustomerId(customerId: string) {
     return null;
   }
 
-  return mapSquareConnection(result.rows[0]);
+  return mapAndRewriteSquareConnection(result.rows[0]);
 }
 
 export async function getValidSquareConnectionByCustomerId(customerId: string) {
@@ -157,6 +214,11 @@ export async function upsertSquareConnection(input: {
   refreshToken: string;
 }) {
   await ensureSquareConnectionsTable();
+  const encrypted = encryptSquareConnectionTokens({
+    accessToken: input.accessToken,
+    customerId: input.customerId,
+    refreshToken: input.refreshToken
+  });
 
   const result = await db.query(
     `insert into public.square_connections (
@@ -182,31 +244,34 @@ export async function upsertSquareConnection(input: {
     [
       input.customerId,
       input.merchantId,
-      input.accessToken,
-      input.refreshToken,
+      encrypted.accessToken,
+      encrypted.refreshToken,
       input.expiresAt ?? null,
       getSquareEnvironmentLabel(),
       input.authorizedScopes
     ]
   );
 
-  return mapSquareConnection(result.rows[0]);
+  return mapAndRewriteSquareConnection(result.rows[0]);
 }
 
 export async function removeSquareConnection(customerId: string) {
-  await ensureSquareConnectionsTable();
+  const connection = await getSquareConnectionByCustomerId(customerId);
+
+  if (!connection) {
+    return null;
+  }
 
   const result = await db.query(
     `delete from public.square_connections
-     where customer_id = $1
-     returning id, customer_id, merchant_id, access_token, refresh_token, expires_at,
-              square_environment, authorized_scopes, connected_at, updated_at`,
-    [customerId]
+     where customer_id = $1 and id = $2
+     returning id`,
+    [customerId, connection.id]
   );
 
   if (!result.rows[0]) {
     return null;
   }
 
-  return mapSquareConnection(result.rows[0]);
+  return connection;
 }

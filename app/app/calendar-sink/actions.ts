@@ -13,6 +13,8 @@ import {
 import {
   createMissingSquareCalendarSinkEmployeeFeeds,
   deleteSquareCalendarSinkEmployeeFeed,
+  disconnectSquareCalendarSink,
+  getSquareCalendarSinkEmployeeFeedForDelivery,
   rotateSquareCalendarSinkFeedToken,
   setSquareCalendarSinkEnabled,
   upsertSquareCalendarSinkEmployeeFeed
@@ -90,6 +92,33 @@ export async function createMissingSquareCalendarSinkFeedsAction(formData: FormD
   redirect(`${redirectTo}?${buildDistributionSearchParams("bulk_created", distribution)}`);
 }
 
+export async function resendSquareCalendarSinkFeedAction(formData: FormData) {
+  const { customer, redirectTo, setupBaseUrl } = await getCalendarSinkActionContext();
+  const feedId = String(formData.get("feedId") ?? "").trim();
+
+  if (!feedId) {
+    redirect(`${redirectTo}?error=feed_required`);
+  }
+
+  const target = await getSquareCalendarSinkEmployeeFeedForDelivery(customer.id, feedId);
+  const distribution = await distributeSquareCalendarSinkFeeds({
+    created: [target],
+    customer,
+    deliveryKind: "resend",
+    mode: "email",
+    setupBaseUrl
+  });
+  const params = new URLSearchParams({
+    saved: "feed_resent",
+    sent: String(distribution.sentCount),
+    missing: String(distribution.missingContactCount),
+    failed: String(distribution.failedCount)
+  });
+
+  revalidatePath("/app/calendar-sink");
+  redirect(`${redirectTo}?${params}`);
+}
+
 export async function rotateSquareCalendarSinkFeedAction(formData: FormData) {
   const { customer, redirectTo } = await getCalendarSinkActionContext();
   const feedId = String(formData.get("feedId") ?? "").trim();
@@ -128,4 +157,18 @@ export async function deleteSquareCalendarSinkFeedAction(formData: FormData) {
   await deleteSquareCalendarSinkEmployeeFeed(customer.id, feedId);
   revalidatePath("/app/calendar-sink");
   redirect(`${redirectTo}?saved=feed_deleted`);
+}
+
+export async function disconnectSquareCalendarSinkAction() {
+  const { customer, redirectTo } = await getCalendarSinkActionContext();
+  let result: Awaited<ReturnType<typeof disconnectSquareCalendarSink>>;
+
+  try {
+    result = await disconnectSquareCalendarSink(customer.id);
+  } catch {
+    redirect(`${redirectTo}?error=square_disconnect_failed`);
+  }
+
+  revalidatePath("/app/calendar-sink");
+  redirect(`${redirectTo}?saved=${result}`);
 }

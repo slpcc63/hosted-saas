@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 
-export function CopyFeedButton({ feedUrl }: { feedUrl: string }) {
+export function CopyFeedButton({
+  feedUrl,
+  label = "Copy address for Google Calendar"
+}: {
+  feedUrl: string;
+  label?: string;
+}) {
   const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "error">("idle");
 
   async function copyFeedUrl() {
@@ -20,8 +26,8 @@ export function CopyFeedButton({ feedUrl }: { feedUrl: string }) {
       {copyStatus === "copied"
         ? "Copied"
         : copyStatus === "error"
-          ? "Copy failed—open raw feed"
-          : "Copy calendar address"}
+          ? "Copy failed—use the address under Other calendar apps"
+          : label}
     </button>
   );
 }

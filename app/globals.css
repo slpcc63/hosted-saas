@@ -1153,6 +1153,10 @@ textarea {
   margin-top: 1rem;
 }
 
+.calendar-email-availability {
+  grid-template-columns: 1fr;
+}
+
 .calendar-messaging-entitlement > div {
   display: grid;
   gap: 0.2rem;
@@ -1234,6 +1238,14 @@ textarea {
   color: var(--danger) !important;
 }
 
+.calendar-manual-sharing-note {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
 .calendar-feed-field-compact {
   margin-top: 0.85rem;
 }
@@ -1301,6 +1313,76 @@ textarea {
   flex-wrap: wrap;
   gap: 0.65rem;
   margin-top: 1.25rem;
+}
+
+.calendar-setup-facts {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0 0 1.4rem;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.calendar-provider-options {
+  display: grid;
+  gap: 1rem;
+}
+
+.calendar-provider-option {
+  padding: 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card-muted);
+}
+
+.calendar-provider-primary {
+  border-color: rgba(17, 17, 17, 0.24);
+}
+
+.calendar-provider-option h2 {
+  margin: 0.2rem 0 0;
+  font-size: 1.3rem;
+}
+
+.calendar-provider-option > p:not(.calendar-provider-label) {
+  margin: 0.55rem 0 1rem;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.calendar-provider-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.calendar-read-only-note {
+  margin: 1.25rem 0 0;
+  padding: 1rem;
+  border-radius: 14px;
+  background: var(--bg-subtle);
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.calendar-other-apps {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.calendar-other-apps summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.calendar-other-apps > p {
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .calendar-employee-instructions {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { collectSquarePages } from "@/lib/square-pagination";
+import { classifySquareRevocationResponse } from "@/lib/square-disconnect";
 
 export type SquareEnvironment = "production" | "sandbox";
 
@@ -458,8 +459,7 @@ export async function exchangeSquareAuthorizationCode(code: string) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Square token exchange failed: ${errorText}`);
+    throw new Error(`Square token exchange failed with status ${response.status}.`);
   }
 
   const tokenResponse = await response.json() as {
@@ -489,8 +489,7 @@ export async function retrieveSquareTokenStatus(accessToken: string) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Square token status failed: ${errorText}`);
+    throw new Error(`Square token status failed with status ${response.status}.`);
   }
 
   return response.json() as Promise<{
@@ -516,8 +515,7 @@ export async function refreshSquareAuthorization(refreshToken: string) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Square token refresh failed: ${errorText}`);
+    throw new Error(`Square token refresh failed with status ${response.status}.`);
   }
 
   return response.json() as Promise<{
@@ -545,10 +543,25 @@ export async function revokeSquareAccessToken(accessToken: string) {
     })
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Square token revoke failed: ${errorText}`);
+  const body = await response.json().catch(() => null) as {
+    errors?: Array<{ code?: string }>;
+    success?: boolean;
+  } | null;
+
+  const result = classifySquareRevocationResponse({
+    errorCodes: body?.errors
+      ?.map((error) => error.code)
+      .filter((code): code is string => Boolean(code)),
+    ok: response.ok,
+    status: response.status,
+    success: body?.success
+  });
+
+  if (result) {
+    return result;
   }
+
+  throw new Error(`Square token revoke failed with status ${response.status}.`);
 }
 
 export function isSquareConfigured() {

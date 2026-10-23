@@ -8,9 +8,12 @@ import {
   createMissingSquareCalendarSinkFeedsAction,
   createSquareCalendarSinkFeedAction,
   deleteSquareCalendarSinkFeedAction,
+  disconnectSquareCalendarSinkAction,
+  resendSquareCalendarSinkFeedAction,
   rotateSquareCalendarSinkFeedAction,
   setSquareCalendarSinkEnabledAction
 } from "./actions";
+import { ConfirmBulkInvitationForm, CopyPrivateSetupLinkButton } from "./manager-controls";
 
 export type CalendarSinkManagerPageProps = {
   searchParams?: Promise<{
@@ -90,6 +93,8 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
     (member) => !configuredTeamMemberIds.has(member.id)
   );
   const activeFeedCount = overview.feeds.filter((feed) => feed.enabled).length;
+  const bulkEmailRecipientCount = availableTeamMembers.filter((member) => member.email_address).length;
+  const bulkMissingEmailCount = availableTeamMembers.length - bulkEmailRecipientCount;
 
   return (
     <>
@@ -129,6 +134,12 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
           {params?.saved === "square_connection" ? (
             <p className="form-success">Square connected successfully.</p>
           ) : null}
+          {params?.saved === "disconnected" ? (
+            <p className="form-success">Square disconnected. Every employee calendar feed is now paused.</p>
+          ) : null}
+          {params?.saved === "already_disconnected" ? (
+            <p className="form-success">Square was already disconnected. Every employee calendar feed is paused.</p>
+          ) : null}
           {params?.saved === "feed_rotated" ? (
             <p className="form-success">A new private address was created. Give the employee their new setup page.</p>
           ) : null}
@@ -141,11 +152,23 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
           {params?.saved === "feed_deleted" ? (
             <p className="form-success">Employee calendar deleted. Its private addresses no longer work.</p>
           ) : null}
+          {params?.saved === "feed_resent" && Number(params.sent ?? 0) > 0 ? (
+            <p className="form-success">Setup email sent. The employee can use the same private setup page.</p>
+          ) : null}
+          {params?.saved === "feed_resent" && Number(params.failed ?? 0) > 0 ? (
+            <p className="form-error">The setup email could not be sent. Try again or copy the private setup link from the employee card.</p>
+          ) : null}
+          {params?.saved === "feed_resent" && Number(params.missing ?? 0) > 0 ? (
+            <p className="form-error">This employee has no email address in Square. Copy the private setup link and share it directly.</p>
+          ) : null}
           {params?.error === "team_member_required" ? (
             <p className="form-error">Choose an employee from the Square roster.</p>
           ) : null}
           {params?.error === "feed_required" ? (
             <p className="form-error">Choose an employee calendar to manage.</p>
+          ) : null}
+          {params?.error === "square_disconnect_failed" ? (
+            <p className="form-error">Square could not be disconnected. The saved connection and employee feed access were left unchanged.</p>
           ) : null}
         </div>
 
@@ -231,7 +254,12 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
                 </div>
               </div>
               {availableTeamMembers.length ? (
-                <form action={createMissingSquareCalendarSinkFeedsAction} className="auth-form calendar-settings-form">
+                <ConfirmBulkInvitationForm
+                  action={createMissingSquareCalendarSinkFeedsAction}
+                  calendarCount={availableTeamMembers.length}
+                  emailRecipientCount={bulkEmailRecipientCount}
+                  missingEmailCount={bulkMissingEmailCount}
+                >
                   <p className="calendar-bulk-count">
                     <strong>{availableTeamMembers.length}</strong> active {availableTeamMembers.length === 1 ? "employee does" : "employees do"} not have a calendar yet.
                   </p>
@@ -262,7 +290,7 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
                   <button className="pill primary pill-button calendar-primary-action" type="submit">
                     Create {availableTeamMembers.length} missing {availableTeamMembers.length === 1 ? "calendar" : "calendars"}
                   </button>
-                </form>
+                </ConfirmBulkInvitationForm>
               ) : (
                 <div className="calendar-empty-state">
                   <strong>The whole Square roster is configured.</strong>
@@ -273,20 +301,27 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
           </div>
         )}
 
-        <div className="calendar-messaging-entitlement">
+        <div className="calendar-messaging-entitlement calendar-email-availability">
           <div>
             <strong>Email distribution is available.</strong>
             <span>Setup messages contain the private subscription page and no schedule details.</span>
           </div>
-          <div>
-            <strong>Text distribution</strong>
-            <span>
-              {overview.textingEntitled
-                ? `Included with ${overview.textingPlanName ?? "the company plan"}; SMS delivery activation is next.`
-                : "Locked until the company subscribes to a texting-enabled plan."}
-            </span>
-          </div>
         </div>
+
+        {overview.connected ? (
+          <details className="dashboard-card calendar-delete-controls">
+            <summary>Disconnect Square</summary>
+            <p>
+              This revokes this company&apos;s Square authorization and pauses every employee calendar.
+              Other features that use this Square connection will also stop until a manager reconnects.
+            </p>
+            <form action={disconnectSquareCalendarSinkAction}>
+              <button className="pill pill-button calendar-danger-button" type="submit">
+                Disconnect Square and pause feeds
+              </button>
+            </form>
+          </details>
+        ) : null}
 
         <section className="calendar-employee-section">
           <div className="calendar-section-heading">
@@ -336,6 +371,17 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
                           <a className="pill" href={webcalUrl}>Subscribe in Apple Calendar</a>
                         </>
                       ) : null}
+                      <CopyPrivateSetupLinkButton setupUrl={setupUrl} />
+                      {feed.emailAddress ? (
+                        <form action={resendSquareCalendarSinkFeedAction}>
+                          <input name="feedId" type="hidden" value={feed.id} />
+                          <button className="pill pill-button" type="submit">Resend setup email</button>
+                        </form>
+                      ) : (
+                        <p className="calendar-manual-sharing-note">
+                          No email address in Square. Copy the private setup link and share it directly with this employee.
+                        </p>
+                      )}
                     </div>
 
                     <details className="calendar-feed-controls">

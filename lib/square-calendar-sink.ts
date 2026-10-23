@@ -2,8 +2,13 @@ import "server-only";
 
 import { randomBytes } from "node:crypto";
 
+import { getCalendarSinkAccessState } from "@/lib/calendar-sink-access";
 import { db } from "@/lib/db";
-import { getValidSquareConnectionByCustomerId } from "@/lib/square-connections";
+import {
+  getSquareConnectionByCustomerId,
+  getValidSquareConnectionByCustomerId
+} from "@/lib/square-connections";
+import { disconnectSquareAuthorization } from "@/lib/square-disconnect";
 import {
   SquarePluginId,
   removeSquarePluginInstallation,
@@ -14,6 +19,7 @@ import {
   isSquareAuthenticationError,
   listSquareJobs,
   listSquareLocations,
+  revokeSquareAccessToken,
   searchSquareScheduledShifts,
   searchSquareTeamMembers,
   SquareTeamMember
@@ -276,6 +282,51 @@ export async function uninstallSquareCalendarSink(customerId: string) {
   return removeSquarePluginInstallation({ customerId, pluginId });
 }
 
+export async function disconnectSquareCalendarSink(customerId: string) {
+  await ensureSquareCalendarSinkSettingsTable();
+
+  return disconnectSquareAuthorization({
+    getConnection: () => getSquareConnectionByCustomerId(customerId),
+    revokeAccess: revokeSquareAccessToken,
+    finalizeLocalDisconnect: async (connectionId) => {
+      const client = await db.connect();
+
+      try {
+        await client.query("begin");
+        await client.query(
+          `update public.square_calendar_sink_feeds
+           set enabled = false,
+               updated_at = now()
+           where customer_id = $1 and enabled = true`,
+          [customerId]
+        );
+        await client.query(
+          `update public.square_calendar_sink_settings
+           set enabled = false,
+               updated_at = now()
+           where customer_id = $1 and enabled = true`,
+          [customerId]
+        );
+
+        if (connectionId) {
+          await client.query(
+            `delete from public.square_connections
+             where customer_id = $1 and id = $2`,
+            [customerId, connectionId]
+          );
+        }
+
+        await client.query("commit");
+      } catch (error) {
+        await client.query("rollback");
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
+  });
+}
+
 export async function getSquareCalendarSinkOverview(customerId: string) {
   const [connection, settings, deliveries, subscription] = await Promise.all([
     getValidSquareConnectionByCustomerId(customerId),
@@ -475,6 +526,35 @@ export async function createMissingSquareCalendarSinkEmployeeFeeds(customerId: s
   return created;
 }
 
+export async function getSquareCalendarSinkEmployeeFeedForDelivery(
+  customerId: string,
+  feedId: string
+) {
+  const connection = await getValidSquareConnectionByCustomerId(customerId);
+
+  if (!connection || !hasSquareScopes(connection.authorizedScopes, requiredSquareCalendarScopes)) {
+    throw new Error("Square must be connected with schedule and employee access.");
+  }
+
+  const [settings, teamMembers] = await Promise.all([
+    listSquareCalendarSinkSettings(customerId),
+    searchSquareTeamMembers(connection.accessToken)
+  ]);
+  const feed = settings.find((candidate) => candidate.id === feedId);
+
+  if (!feed?.teamMemberId) {
+    throw new Error("Employee calendar feed not found.");
+  }
+
+  const teamMember = teamMembers.find((member) => member.id === feed.teamMemberId);
+
+  if (!teamMember) {
+    throw new Error("The employee is no longer active in Square.");
+  }
+
+  return { feed, teamMember };
+}
+
 export async function rotateSquareCalendarSinkFeedToken(customerId: string, feedId: string) {
   await ensureSquareCalendarSinkSettingsTable();
   const result = await db.query(
@@ -588,13 +668,13 @@ export async function getSquareCalendarSinkFeed(feedToken: string) {
     [feedToken]
   );
 
-  if (!result.rows[0]) {
+  if (getCalendarSinkAccessState(result.rows[0] ? mapSettings(result.rows[0]) : null) === "not_found") {
     return null;
   }
 
   const settings = mapSettings(result.rows[0]);
 
-  if (!settings.enabled) {
+  if (getCalendarSinkAccessState(settings) !== "active") {
     return null;
   }
 
