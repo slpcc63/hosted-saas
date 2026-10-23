@@ -1,4 +1,5 @@
 import { PublicSiteHeader } from "@/components/public-site-header";
+import { supportHref, supportEmail } from "@/lib/public-contact";
 import { ownerSignIn, publicProducts } from "@/lib/public-products";
 
 export default function HomePage() {
@@ -33,10 +34,11 @@ export default function HomePage() {
       </section>
       <section className="suite-section" id="availability" aria-labelledby="availability-title">
         <p className="eyebrow">Current availability</p><h2 id="availability-title">Assisted access, with clear expectations.</h2>
-        <p>Public paid onboarding is not open. Existing customers can sign in to their installed tools. New pilot or demo access is arranged directly with your SLPCC63 contact; signing in does not automatically grant access.</p>
+        <p>Public paid onboarding is not open. Existing customers can sign in to their installed tools. New pilot or demo access is arranged through SLPCC63 support; signing in does not automatically grant access.</p>
+        <p><a className="pill" href={supportHref}>Request assisted access: {supportEmail}</a></p>
         <p>Closing Checklist can be explored using sample data. It resets on reload and does not perform a real Square clock-out.</p>
       </section>
     </main>
-    <footer className="shell suite-footer"><span>SLPCC63 · Tools for the workday</span><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href={ownerSignIn}>Customer sign-in</a></footer>
+    <footer className="shell suite-footer"><span>SLPCC63 · Tools for the workday</span><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href={supportHref}>Support</a><a href={ownerSignIn}>Customer sign-in</a></footer>
   </>;
 }

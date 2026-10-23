@@ -1,3 +1,4 @@
+import { EmployeeLegalLinks } from "@/components/employee-legal-links";
 import { notFound } from "next/navigation";
 
 import { submitMissingPunchDigestAction } from "@/app/app/actions";
@@ -81,6 +82,7 @@ export default async function WeeklyDigestPage({ params, searchParams }: WeeklyD
             ) : null}
           </article>
         </section>
+        <EmployeeLegalLinks />
       </main>
     </>
   );

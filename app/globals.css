@@ -1775,3 +1775,7 @@ textarea {
   .suite-actions { align-items: stretch; flex-direction: column; }
   .suite-footer span { width: 100%; }
 }
+
+.employee-legal-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 1.5rem; padding: 1.5rem 0; }
+.legal-card a, .employee-legal-links a { text-decoration: underline; text-underline-offset: .2em; overflow-wrap: anywhere; }
+.legal-card [id] { scroll-margin-top: 7rem; }

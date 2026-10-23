@@ -1,3 +1,4 @@
+import { EmployeeLegalLinks } from "@/components/employee-legal-links";
 import { notFound } from "next/navigation";
 
 import {
@@ -206,6 +207,7 @@ export default async function EmployeeResponsePage({
             </ul>
           </aside>
         </section>
+        <EmployeeLegalLinks />
       </main>
     </>
   );

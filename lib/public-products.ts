@@ -29,6 +29,6 @@ export const publicProducts = [
     square: "Uses sample data. It does not save data or change Square. Clock-out is simulated, and reloading resets the demo.",
     access: "Open the prototype directly. Shared accounts, employee invitations, and persistent checklist runs are not available in this prototype.",
     availability: "Prototype · demo data resets. Available to explore; not offered as a paid or installed Square extension.",
-    href: "https://closing-checklist-platform-i3hoahfgd-slpcc63-8889s-projects.vercel.app", action: "Open interactive prototype"
+    href: "https://closing-checklist-platform.vercel.app", action: "Open interactive prototype"
   }
 ] as const;

@@ -1,3 +1,4 @@
+import { EmployeeLegalLinks } from "@/components/employee-legal-links";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -109,6 +110,7 @@ export default async function EmployeeSubscriptionPage({ params }: EmployeeSubsc
         )}
       </section>
       <p className="calendar-subscription-footer">Schedule information comes directly from Square.</p>
+      <EmployeeLegalLinks />
     </main>
   );
 }
