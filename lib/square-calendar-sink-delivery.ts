@@ -4,6 +4,7 @@ import {
   getCalendarSinkEmailIdempotencyKey,
   type CalendarSinkEmailDeliveryKind
 } from "@/lib/calendar-sink-delivery-identity";
+import { getCalendarSinkReplyToEmail } from "@/lib/calendar-sink-email";
 import { getCalendarSinkDeliveryPlan } from "@/lib/calendar-sink-delivery-plan";
 import type { CustomerProfile } from "@/lib/customers";
 import { getDefaultManagedSenderEmail, sendTransactionalEmail } from "@/lib/email";
@@ -135,7 +136,7 @@ export async function distributeSquareCalendarSinkFeeds(input: {
           feedId: feed.id,
           kind: input.deliveryKind ?? "initial"
         }),
-        replyTo: input.customer.email,
+        replyTo: getCalendarSinkReplyToEmail(),
         subject,
         text,
         to: recipient

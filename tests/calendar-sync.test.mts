@@ -5,7 +5,9 @@ import test from "node:test";
 import { getCalendarSinkAccessState } from "../lib/calendar-sink-access.ts";
 import { getCalendarSinkDeliveryPlan } from "../lib/calendar-sink-delivery-plan.ts";
 import { getCalendarSinkEmailIdempotencyKey } from "../lib/calendar-sink-delivery-identity.ts";
+import { getCalendarSinkReplyToEmail } from "../lib/calendar-sink-email.ts";
 import { getPrivateCalendarCacheHeaders } from "../lib/calendar-sink-cache.ts";
+import { copyTextToClipboard } from "../lib/copy-to-clipboard.ts";
 import { buildSquareShiftCalendar } from "../lib/icalendar.ts";
 import { collectSquarePages } from "../lib/square-pagination.ts";
 import {
@@ -150,6 +152,45 @@ test("each resend attempt receives a new idempotency identity", () => {
   assert.equal(first, "calendar-sink-resend-FEED_A-ATTEMPT_A");
   assert.equal(second, "calendar-sink-resend-FEED_A-ATTEMPT_B");
   assert.notEqual(first, second);
+});
+
+test("Calendar Sync replies use product support rather than the manager login", () => {
+  assert.equal(
+    getCalendarSinkReplyToEmail({
+      CALENDAR_SINK_REPLY_TO_EMAIL: " Calendar-Sync@SLPCC63.com ",
+      NEXT_PUBLIC_SUPPORT_EMAIL: "support@slpcc63.com"
+    }),
+    "calendar-sync@slpcc63.com"
+  );
+  assert.equal(
+    getCalendarSinkReplyToEmail({ NEXT_PUBLIC_SUPPORT_EMAIL: " Support@SLPCC63.com " }),
+    "support@slpcc63.com"
+  );
+});
+
+test("copy controls fall back when Clipboard API permission is denied", async () => {
+  let fallbackValue = "";
+
+  await copyTextToClipboard("private-calendar-url", {
+    legacyCopy: (value) => {
+      fallbackValue = value;
+      return true;
+    },
+    writeText: async () => {
+      throw new Error("permission denied");
+    }
+  });
+
+  assert.equal(fallbackValue, "private-calendar-url");
+  await assert.rejects(
+    copyTextToClipboard("private-calendar-url", {
+      legacyCopy: () => false,
+      writeText: async () => {
+        throw new Error("permission denied");
+      }
+    }),
+    /Clipboard access is unavailable/
+  );
 });
 
 test("Square OAuth tokens use authenticated versioned encryption", () => {

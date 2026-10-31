@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
+
 export function CopyFeedButton({
   feedUrl,
   label = "Copy address for Google Calendar"
@@ -13,7 +15,7 @@ export function CopyFeedButton({
 
   async function copyFeedUrl() {
     try {
-      await navigator.clipboard.writeText(feedUrl);
+      await copyTextToClipboard(feedUrl);
       setCopyStatus("copied");
       window.setTimeout(() => setCopyStatus("idle"), 2000);
     } catch {

@@ -2,12 +2,14 @@
 
 import { useState, type FormEvent, type ReactNode } from "react";
 
+import { copyTextToClipboard } from "@/lib/copy-to-clipboard";
+
 export function CopyPrivateSetupLinkButton({ setupUrl }: { setupUrl: string }) {
   const [status, setStatus] = useState<"idle" | "copied" | "error">("idle");
 
   async function copySetupUrl() {
     try {
-      await navigator.clipboard.writeText(setupUrl);
+      await copyTextToClipboard(setupUrl);
       setStatus("copied");
       window.setTimeout(() => setStatus("idle"), 2000);
     } catch {
