@@ -6,8 +6,8 @@ import { getCalendarSinkAccessState } from "@/lib/calendar-sink-access";
 import { ensureCustomerProfilesTable } from "@/lib/customers";
 import { db } from "@/lib/db";
 import {
-  getSquareConnectionByCustomerId,
-  getValidSquareConnectionByCustomerId
+  getSquareConnection,
+  getValidSquareConnection
 } from "@/lib/square-connections";
 import { disconnectSquareAuthorization } from "@/lib/square-disconnect";
 import {
@@ -289,8 +289,8 @@ export async function disconnectSquareCalendarSink(customerId: string) {
   await ensureSquareCalendarSinkSettingsTable();
 
   return disconnectSquareAuthorization({
-    getConnection: () => getSquareConnectionByCustomerId(customerId),
-    revokeAccess: revokeSquareAccessToken,
+    getConnection: () => getSquareConnection({ customerId, pluginId }),
+    revokeAccess: (accessToken) => revokeSquareAccessToken(pluginId, accessToken),
     finalizeLocalDisconnect: async (connectionId) => {
       const client = await db.connect();
 
@@ -314,8 +314,10 @@ export async function disconnectSquareCalendarSink(customerId: string) {
         if (connectionId) {
           await client.query(
             `delete from public.square_connections
-             where customer_id = $1 and id = $2`,
-            [customerId, connectionId]
+             where customer_id = $1
+               and (plugin_id = $2 or (plugin_id is null and $2 = 'square-calendar-sink'))
+               and id = $3`,
+            [customerId, pluginId, connectionId]
           );
         }
 
@@ -332,7 +334,7 @@ export async function disconnectSquareCalendarSink(customerId: string) {
 
 export async function getSquareCalendarSinkOverview(customerId: string) {
   const [connection, settings, deliveries, subscription] = await Promise.all([
-    getValidSquareConnectionByCustomerId(customerId),
+    getValidSquareConnection({ customerId, pluginId }),
     listSquareCalendarSinkSettings(customerId),
     listLatestSquareCalendarSinkDeliveries(customerId),
     getActiveSubscriptionForProduct({ customerId, productSlug: pluginId })
@@ -434,7 +436,10 @@ export async function upsertSquareCalendarSinkEmployeeFeed(input: {
   customerId: string;
   teamMemberId: string;
 }) {
-  const connection = await getValidSquareConnectionByCustomerId(input.customerId);
+  const connection = await getValidSquareConnection({
+    customerId: input.customerId,
+    pluginId
+  });
 
   if (!connection || !hasSquareScopes(connection.authorizedScopes, requiredSquareCalendarScopes)) {
     throw new Error("Square must be connected with schedule and employee access.");
@@ -489,7 +494,7 @@ async function upsertSquareCalendarSinkFeedRecord(input: {
 }
 
 export async function createMissingSquareCalendarSinkEmployeeFeeds(customerId: string) {
-  const connection = await getValidSquareConnectionByCustomerId(customerId);
+  const connection = await getValidSquareConnection({ customerId, pluginId });
 
   if (!connection || !hasSquareScopes(connection.authorizedScopes, requiredSquareCalendarScopes)) {
     throw new Error("Square must be connected with schedule and employee access.");
@@ -533,7 +538,7 @@ export async function getSquareCalendarSinkEmployeeFeedForDelivery(
   customerId: string,
   feedId: string
 ) {
-  const connection = await getValidSquareConnectionByCustomerId(customerId);
+  const connection = await getValidSquareConnection({ customerId, pluginId });
 
   if (!connection || !hasSquareScopes(connection.authorizedScopes, requiredSquareCalendarScopes)) {
     throw new Error("Square must be connected with schedule and employee access.");
@@ -685,7 +690,10 @@ export async function getSquareCalendarSinkFeed(feedToken: string) {
     return { settings, coworkerShifts: [], jobs: [], locations: [], shifts: [], teamMembers: [] };
   }
 
-  const connection = await getValidSquareConnectionByCustomerId(settings.customerId);
+  const connection = await getValidSquareConnection({
+    customerId: settings.customerId,
+    pluginId
+  });
 
   if (!connection || !hasSquareScopes(connection.authorizedScopes, requiredSquareCalendarScopes)) {
     return null;

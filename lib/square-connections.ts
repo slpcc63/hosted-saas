@@ -11,6 +11,10 @@ import {
   decryptSquareToken,
   encryptSquareConnectionTokens
 } from "@/lib/square-token-crypto";
+import {
+  SquarePluginId,
+  squarePluginIds
+} from "@/lib/square-plugin-installations";
 
 export type SquareConnection = {
   accessToken: string;
@@ -20,6 +24,7 @@ export type SquareConnection = {
   expiresAt: Date | null;
   id: string;
   merchantId: string;
+  pluginId: SquarePluginId;
   refreshToken: string;
   squareEnvironment: string;
   updatedAt: Date;
@@ -33,6 +38,16 @@ function parseScopes(value: unknown) {
   }
 
   return [];
+}
+
+function parsePluginId(value: unknown): SquarePluginId {
+  const pluginId = String(value);
+
+  if (!squarePluginIds.includes(pluginId as SquarePluginId)) {
+    throw new Error(`Unknown Square connection plugin: ${pluginId}`);
+  }
+
+  return pluginId as SquarePluginId;
 }
 
 function decodeSquareConnection(row: Record<string, unknown>) {
@@ -52,6 +67,7 @@ function decodeSquareConnection(row: Record<string, unknown>) {
     connection: {
       id: String(row.id),
       customerId,
+      pluginId: parsePluginId(row.plugin_id),
       merchantId: String(row.merchant_id),
       accessToken: accessToken.token,
       refreshToken: refreshToken.token,
@@ -113,6 +129,7 @@ export async function ensureSquareConnectionsTable() {
       create table if not exists public.square_connections (
         id uuid primary key default gen_random_uuid(),
         customer_id uuid not null references public.customer_profiles(id) on delete cascade,
+        plugin_id text,
         merchant_id text not null,
         access_token text not null,
         refresh_token text not null,
@@ -125,6 +142,9 @@ export async function ensureSquareConnectionsTable() {
 
       alter table public.square_connections
         add column if not exists customer_id uuid references public.customer_profiles(id) on delete cascade;
+
+      alter table public.square_connections
+        add column if not exists plugin_id text;
 
       do $$
       begin
@@ -140,45 +160,103 @@ export async function ensureSquareConnectionsTable() {
       end
       $$;
 
-      create unique index if not exists square_connections_customer_id_idx
+      do $$
+      begin
+        if not exists (
+          select 1
+          from pg_constraint
+          where conname = 'square_connections_plugin_id_check'
+            and conrelid = 'public.square_connections'::regclass
+        ) then
+          alter table public.square_connections
+            add constraint square_connections_plugin_id_check
+            check (
+              plugin_id is null or plugin_id in (
+                'square-calendar-sink',
+                'square-time-card-manager'
+              )
+            );
+        end if;
+      end
+      $$;
+
+      drop index if exists public.square_connections_customer_id_idx;
+
+      create unique index if not exists square_connections_customer_plugin_idx
+        on public.square_connections(customer_id, plugin_id)
+        where customer_id is not null and plugin_id is not null;
+
+      create unique index if not exists square_connections_legacy_customer_idx
         on public.square_connections(customer_id)
-        where customer_id is not null;
+        where customer_id is not null and plugin_id is null;
     `).then(() => undefined);
   }
 
   return squareConnectionsTableReady;
 }
 
-export async function getSquareConnectionByCustomerId(customerId: string) {
+export async function getSquareConnection(input: {
+  customerId: string;
+  pluginId: SquarePluginId;
+}) {
   await ensureSquareConnectionsTable();
 
   const result = await db.query(
-    `select id, customer_id, merchant_id, access_token, refresh_token, expires_at,
+    `select id, customer_id, plugin_id, merchant_id, access_token, refresh_token, expires_at,
             square_environment, authorized_scopes, connected_at, updated_at
      from public.square_connections
-     where customer_id = $1
+     where customer_id = $1 and plugin_id = $2
      limit 1`,
-    [customerId]
+    [input.customerId, input.pluginId]
   );
 
-  if (!result.rows[0]) {
+  if (result.rows[0]) {
+    return mapAndRewriteSquareConnection(result.rows[0]);
+  }
+
+  if (input.pluginId !== "square-calendar-sink") {
     return null;
   }
 
-  return mapAndRewriteSquareConnection(result.rows[0]);
+  // The pre-split row is retained as Calendar Sync's legacy connection. TCM
+  // deliberately never falls back to it and requires its own authorization.
+  const legacyResult = await db.query(
+    `select id, customer_id, merchant_id, access_token, refresh_token, expires_at,
+            square_environment, authorized_scopes, connected_at, updated_at
+     from public.square_connections
+     where customer_id = $1 and plugin_id is null
+     limit 1`,
+    [input.customerId]
+  );
+
+  if (!legacyResult.rows[0]) {
+    return null;
+  }
+
+  return mapAndRewriteSquareConnection({
+    ...legacyResult.rows[0],
+    plugin_id: input.pluginId
+  });
 }
 
-export async function getValidSquareConnectionByCustomerId(customerId: string) {
-  let connection = await getSquareConnectionByCustomerId(customerId);
+export async function getValidSquareConnection(input: {
+  customerId: string;
+  pluginId: SquarePluginId;
+}) {
+  let connection = await getSquareConnection(input);
 
   if (!connection) {
     return null;
   }
 
   if (connection.authorizedScopes.length === 0) {
-    const tokenStatus = await retrieveSquareTokenStatus(connection.accessToken);
+    const tokenStatus = await retrieveSquareTokenStatus(
+      connection.pluginId,
+      connection.accessToken
+    );
     connection = await upsertSquareConnection({
-      customerId,
+      customerId: input.customerId,
+      pluginId: input.pluginId,
       merchantId: tokenStatus.merchant_id || connection.merchantId,
       accessToken: connection.accessToken,
       refreshToken: connection.refreshToken,
@@ -193,10 +271,14 @@ export async function getValidSquareConnectionByCustomerId(customerId: string) {
     return connection;
   }
 
-  const refreshed = await refreshSquareAuthorization(connection.refreshToken);
+  const refreshed = await refreshSquareAuthorization(
+    connection.pluginId,
+    connection.refreshToken
+  );
 
   return upsertSquareConnection({
-    customerId,
+    customerId: input.customerId,
+    pluginId: input.pluginId,
     merchantId: refreshed.merchant_id || connection.merchantId,
     accessToken: refreshed.access_token,
     refreshToken: refreshed.refresh_token,
@@ -211,6 +293,7 @@ export async function upsertSquareConnection(input: {
   customerId: string;
   expiresAt?: string;
   merchantId: string;
+  pluginId: SquarePluginId;
   refreshToken: string;
 }) {
   await ensureSquareConnectionsTable();
@@ -223,14 +306,16 @@ export async function upsertSquareConnection(input: {
   const result = await db.query(
     `insert into public.square_connections (
       customer_id,
+      plugin_id,
       merchant_id,
       access_token,
       refresh_token,
       expires_at,
       square_environment,
       authorized_scopes
-    ) values ($1, $2, $3, $4, $5, $6, $7)
-    on conflict (customer_id) where customer_id is not null
+    ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+    on conflict (customer_id, plugin_id)
+      where customer_id is not null and plugin_id is not null
     do update set
       merchant_id = excluded.merchant_id,
       access_token = excluded.access_token,
@@ -239,15 +324,16 @@ export async function upsertSquareConnection(input: {
       square_environment = excluded.square_environment,
       authorized_scopes = excluded.authorized_scopes,
       updated_at = now()
-    returning id, customer_id, merchant_id, access_token, refresh_token, expires_at,
+    returning id, customer_id, plugin_id, merchant_id, access_token, refresh_token, expires_at,
               square_environment, authorized_scopes, connected_at, updated_at`,
     [
       input.customerId,
+      input.pluginId,
       input.merchantId,
       encrypted.accessToken,
       encrypted.refreshToken,
       input.expiresAt ?? null,
-      getSquareEnvironmentLabel(),
+      getSquareEnvironmentLabel(input.pluginId),
       input.authorizedScopes
     ]
   );
@@ -255,8 +341,11 @@ export async function upsertSquareConnection(input: {
   return mapAndRewriteSquareConnection(result.rows[0]);
 }
 
-export async function removeSquareConnection(customerId: string) {
-  const connection = await getSquareConnectionByCustomerId(customerId);
+export async function removeSquareConnection(input: {
+  customerId: string;
+  pluginId: SquarePluginId;
+}) {
+  const connection = await getSquareConnection(input);
 
   if (!connection) {
     return null;
@@ -264,9 +353,11 @@ export async function removeSquareConnection(customerId: string) {
 
   const result = await db.query(
     `delete from public.square_connections
-     where customer_id = $1 and id = $2
+     where customer_id = $1
+       and (plugin_id = $2 or (plugin_id is null and $2 = 'square-calendar-sink'))
+       and id = $3
      returning id`,
-    [customerId, connection.id]
+    [input.customerId, input.pluginId, connection.id]
   );
 
   if (!result.rows[0]) {

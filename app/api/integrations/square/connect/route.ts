@@ -22,7 +22,15 @@ function isSquarePluginId(value: string | null): value is SquarePluginId {
 export async function GET(request: NextRequest) {
   const routing = await getPublicRouting();
 
-  if (!isSquareConfigured()) {
+  const requestedPlugin = request.nextUrl.searchParams.get("plugin");
+
+  if (!isSquarePluginId(requestedPlugin)) {
+    return NextResponse.redirect(
+      new URL(`${routing.dashboardPath}?error=square_plugin_invalid`, request.url)
+    );
+  }
+
+  if (!isSquareConfigured(requestedPlugin)) {
     return NextResponse.redirect(
       new URL(`${routing.dashboardPath}?error=square_not_configured`, request.url)
     );
@@ -43,16 +51,10 @@ export async function GET(request: NextRequest) {
     status: "active"
   });
 
-  const requestedPlugin = request.nextUrl.searchParams.get("plugin");
-
-  if (!isSquarePluginId(requestedPlugin)) {
-    return NextResponse.redirect(
-      new URL(`${routing.dashboardPath}?error=square_plugin_invalid`, request.url)
-    );
-  }
-
   const state = randomUUID();
-  const response = NextResponse.redirect(getSquareAuthorizationUrl(state));
+  const response = NextResponse.redirect(
+    getSquareAuthorizationUrl(requestedPlugin, state)
+  );
 
   response.cookies.set(stateCookieName, JSON.stringify({
     pluginId: requestedPlugin,

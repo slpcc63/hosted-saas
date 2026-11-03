@@ -143,14 +143,23 @@ subscription row using the Checkout session metadata.
 - the current approved workflow centers on missed clock-out notifications
 - additional offerings remain unpublished or in backlog until approved
 
-Add these environment variables before testing Square OAuth:
+Each extension has its own Square OAuth application and saved connection. Add
+product-specific values before testing OAuth. The older unprefixed variables are
+accepted only as a temporary compatibility fallback while environments are
+migrated; do not use one production Square application for both products.
 
 ```text
-SQUARE_ENVIRONMENT=production
-SQUARE_APPLICATION_ID=...
-SQUARE_APPLICATION_SECRET=...
-SQUARE_REDIRECT_URI=https://app.slpcc63.com/api/integrations/square/callback
-SQUARE_SCOPES=MERCHANT_PROFILE_READ TIMECARDS_READ EMPLOYEES_READ
+CALENDAR_SYNC_SQUARE_ENVIRONMENT=production
+CALENDAR_SYNC_SQUARE_APPLICATION_ID=...
+CALENDAR_SYNC_SQUARE_APPLICATION_SECRET=...
+CALENDAR_SYNC_SQUARE_REDIRECT_URI=https://app.slpcc63.com/api/integrations/square/callback
+CALENDAR_SYNC_SQUARE_SCOPES=MERCHANT_PROFILE_READ TIMECARDS_READ EMPLOYEES_READ
+
+TIME_CARD_MANAGER_SQUARE_ENVIRONMENT=production
+TIME_CARD_MANAGER_SQUARE_APPLICATION_ID=...
+TIME_CARD_MANAGER_SQUARE_APPLICATION_SECRET=...
+TIME_CARD_MANAGER_SQUARE_REDIRECT_URI=https://app.slpcc63.com/api/integrations/square/callback
+TIME_CARD_MANAGER_SQUARE_SCOPES=MERCHANT_PROFILE_READ TIMECARDS_READ TIMECARDS_WRITE EMPLOYEES_READ
 ```
 
 ## Time Card Manager automation

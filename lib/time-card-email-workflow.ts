@@ -5,7 +5,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { getAppOrigin } from "@/lib/deployment";
 import { sendTransactionalEmail } from "@/lib/email";
-import { getValidSquareConnectionByCustomerId } from "@/lib/square-connections";
+import { getValidSquareConnection } from "@/lib/square-connections";
 import { hasSquareScopes, searchSquareTeamMembers } from "@/lib/square";
 import { parseEmployeeTimeResponse } from "@/lib/time-card-response-parser";
 import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
@@ -512,7 +512,10 @@ export async function ensureTimeCardEmailWorkflowTables() {
 
 export async function syncTimeCardEmployeesFromSquare(customerId: string) {
   await ensureTimeCardEmailWorkflowTables();
-  const connection = await getValidSquareConnectionByCustomerId(customerId);
+  const connection = await getValidSquareConnection({
+    customerId,
+    pluginId: "square-time-card-manager"
+  });
 
   if (!connection) {
     throw new Error("Square is not connected for this customer");

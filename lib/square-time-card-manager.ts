@@ -10,8 +10,8 @@ import {
   sendTransactionalEmail
 } from "@/lib/email";
 import {
-  getSquareConnectionByCustomerId,
-  getValidSquareConnectionByCustomerId
+  getSquareConnection,
+  getValidSquareConnection
 } from "@/lib/square-connections";
 import {
   hasSquareScopes,
@@ -1343,7 +1343,7 @@ export async function sendTimeCardManagerMissedClockOutEmail(input: {
 export const requiredSquareLaborScopes = ["TIMECARDS_READ", "EMPLOYEES_READ"] as const;
 
 export async function getTimeCardManagerSquareStatus(customerId: string) {
-  const connection = await getSquareConnectionByCustomerId(customerId);
+  const connection = await getSquareConnection({ customerId, pluginId });
 
   if (!connection) {
     return {
@@ -1364,7 +1364,10 @@ export async function findMissedClockOutCandidatesForCustomer(input: {
   customerId: string;
   thresholdHours: number;
 }) {
-  const connection = await getValidSquareConnectionByCustomerId(input.customerId);
+  const connection = await getValidSquareConnection({
+    customerId: input.customerId,
+    pluginId
+  });
 
   if (!connection) {
     throw new Error("Square is not connected for this customer");

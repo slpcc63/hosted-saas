@@ -100,11 +100,15 @@ export async function GET(request: NextRequest) {
   let callbackStage = "token_exchange";
 
   try {
-    const tokenResponse = await exchangeSquareAuthorizationCode(code);
+    const tokenResponse = await exchangeSquareAuthorizationCode(
+      storedState.pluginId,
+      code
+    );
 
     callbackStage = "connection_storage";
     await upsertSquareConnection({
       customerId: customer.id,
+      pluginId: storedState.pluginId,
       merchantId: tokenResponse.merchant_id,
       accessToken: tokenResponse.access_token,
       refreshToken: tokenResponse.refresh_token,

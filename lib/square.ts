@@ -2,49 +2,90 @@ import "server-only";
 
 import { collectSquarePages } from "@/lib/square-pagination";
 import { classifySquareRevocationResponse } from "@/lib/square-disconnect";
+import type { SquarePluginId } from "@/lib/square-plugin-installations";
 
 export type SquareEnvironment = "production" | "sandbox";
 
 const squareVersion = "2026-01-22";
-const defaultSquareScopes = [
-  "MERCHANT_PROFILE_READ",
-  "TIMECARDS_READ",
-  "TIMECARDS_WRITE",
-  "EMPLOYEES_READ"
-];
+const defaultSquareScopes: Record<SquarePluginId, string[]> = {
+  "square-calendar-sink": [
+    "MERCHANT_PROFILE_READ",
+    "TIMECARDS_READ",
+    "EMPLOYEES_READ"
+  ],
+  "square-time-card-manager": [
+    "MERCHANT_PROFILE_READ",
+    "TIMECARDS_READ",
+    "TIMECARDS_WRITE",
+    "EMPLOYEES_READ"
+  ]
+};
 
-function getSquareEnvironment(): SquareEnvironment {
-  return process.env.SQUARE_ENVIRONMENT === "sandbox"
+const squarePluginEnvironmentPrefixes: Record<SquarePluginId, string> = {
+  "square-calendar-sink": "CALENDAR_SYNC",
+  "square-time-card-manager": "TIME_CARD_MANAGER"
+};
+
+function getSquarePluginEnvironmentValue(pluginId: SquarePluginId, name: string) {
+  const prefix = squarePluginEnvironmentPrefixes[pluginId];
+  const productValue = process.env[`${prefix}_SQUARE_${name}`];
+
+  if (productValue !== undefined) {
+    return productValue;
+  }
+
+  // Calendar Sync owns the legacy connection and keeps the unprefixed values
+  // until its controlled environment migration. TCM must never silently reuse
+  // those credentials, because revoking one shared Square authorization would
+  // break both products again.
+  if (pluginId === "square-calendar-sink") {
+    return process.env[`SQUARE_${name}`] ?? "";
+  }
+
+  return "";
+}
+
+function getSquareEnvironment(pluginId?: SquarePluginId): SquareEnvironment {
+  const configured = pluginId
+    ? getSquarePluginEnvironmentValue(pluginId, "ENVIRONMENT")
+    : process.env.SQUARE_ENVIRONMENT;
+
+  return configured === "sandbox"
     ? "sandbox"
     : "production";
 }
 
-export function getSquareBaseUrl() {
-  return getSquareEnvironment() === "sandbox"
+export function getSquareBaseUrl(pluginId?: SquarePluginId) {
+  return getSquareEnvironment(pluginId) === "sandbox"
     ? "https://connect.squareupsandbox.com"
     : "https://connect.squareup.com";
 }
 
-export function getSquareAppId() {
-  return process.env.SQUARE_APPLICATION_ID ?? "";
+export function getSquareAppId(pluginId: SquarePluginId) {
+  return getSquarePluginEnvironmentValue(pluginId, "APPLICATION_ID");
 }
 
-export function getSquareAppSecret() {
-  return process.env.SQUARE_APPLICATION_SECRET ?? "";
+export function getSquareAppSecret(pluginId: SquarePluginId) {
+  return getSquarePluginEnvironmentValue(pluginId, "APPLICATION_SECRET");
 }
 
-export function getSquareRedirectUri() {
-  return (
-    process.env.SQUARE_REDIRECT_URI ??
-    "https://hosted-saas.vercel.app/api/integrations/square/callback"
-  );
+export function getSquareRedirectUri(pluginId: SquarePluginId) {
+  const configured = getSquarePluginEnvironmentValue(pluginId, "REDIRECT_URI");
+
+  if (configured) {
+    return configured;
+  }
+
+  return pluginId === "square-calendar-sink"
+    ? "https://hosted-saas.vercel.app/api/integrations/square/callback"
+    : "";
 }
 
-export function getSquareScopes() {
-  const configuredScopes = process.env.SQUARE_SCOPES?.trim();
+export function getSquareScopes(pluginId: SquarePluginId) {
+  const configuredScopes = getSquarePluginEnvironmentValue(pluginId, "SCOPES").trim();
 
   if (!configuredScopes) {
-    return defaultSquareScopes;
+    return defaultSquareScopes[pluginId];
   }
 
   return configuredScopes
@@ -428,33 +469,33 @@ export function hasSquareScopes(
   return requiredScopes.every((scope) => scopeSet.has(scope));
 }
 
-export function getSquareAuthorizationUrl(state: string) {
+export function getSquareAuthorizationUrl(pluginId: SquarePluginId, state: string) {
   const params = new URLSearchParams({
-    client_id: getSquareAppId(),
-    scope: getSquareScopes().join(" "),
+    client_id: getSquareAppId(pluginId),
+    scope: getSquareScopes(pluginId).join(" "),
     state
   });
 
-  if (getSquareEnvironment() !== "sandbox") {
+  if (getSquareEnvironment(pluginId) !== "sandbox") {
     params.set("session", "false");
   }
 
-  return `${getSquareBaseUrl()}/oauth2/authorize?${params.toString()}`;
+  return `${getSquareBaseUrl(pluginId)}/oauth2/authorize?${params.toString()}`;
 }
 
-export async function exchangeSquareAuthorizationCode(code: string) {
-  const response = await fetch(`${getSquareBaseUrl()}/oauth2/token`, {
+export async function exchangeSquareAuthorizationCode(pluginId: SquarePluginId, code: string) {
+  const response = await fetch(`${getSquareBaseUrl(pluginId)}/oauth2/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Square-Version": squareVersion
     },
     body: JSON.stringify({
-      client_id: getSquareAppId(),
-      client_secret: getSquareAppSecret(),
+      client_id: getSquareAppId(pluginId),
+      client_secret: getSquareAppSecret(pluginId),
       code,
       grant_type: "authorization_code",
-      redirect_uri: getSquareRedirectUri()
+      redirect_uri: getSquareRedirectUri(pluginId)
     })
   });
 
@@ -470,7 +511,7 @@ export async function exchangeSquareAuthorizationCode(code: string) {
     scopes?: string[];
     token_type: string;
   };
-  const tokenStatus = await retrieveSquareTokenStatus(tokenResponse.access_token);
+  const tokenStatus = await retrieveSquareTokenStatus(pluginId, tokenResponse.access_token);
 
   return {
     ...tokenResponse,
@@ -478,8 +519,11 @@ export async function exchangeSquareAuthorizationCode(code: string) {
   };
 }
 
-export async function retrieveSquareTokenStatus(accessToken: string) {
-  const response = await fetch(`${getSquareBaseUrl()}/oauth2/token/status`, {
+export async function retrieveSquareTokenStatus(
+  pluginId: SquarePluginId,
+  accessToken: string
+) {
+  const response = await fetch(`${getSquareBaseUrl(pluginId)}/oauth2/token/status`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -499,16 +543,19 @@ export async function retrieveSquareTokenStatus(accessToken: string) {
   }>;
 }
 
-export async function refreshSquareAuthorization(refreshToken: string) {
-  const response = await fetch(`${getSquareBaseUrl()}/oauth2/token`, {
+export async function refreshSquareAuthorization(
+  pluginId: SquarePluginId,
+  refreshToken: string
+) {
+  const response = await fetch(`${getSquareBaseUrl(pluginId)}/oauth2/token`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Square-Version": squareVersion
     },
     body: JSON.stringify({
-      client_id: getSquareAppId(),
-      client_secret: getSquareAppSecret(),
+      client_id: getSquareAppId(pluginId),
+      client_secret: getSquareAppSecret(pluginId),
       grant_type: "refresh_token",
       refresh_token: refreshToken
     })
@@ -528,17 +575,20 @@ export async function refreshSquareAuthorization(refreshToken: string) {
   }>;
 }
 
-export async function revokeSquareAccessToken(accessToken: string) {
-  const response = await fetch(`${getSquareBaseUrl()}/oauth2/revoke`, {
+export async function revokeSquareAccessToken(
+  pluginId: SquarePluginId,
+  accessToken: string
+) {
+  const response = await fetch(`${getSquareBaseUrl(pluginId)}/oauth2/revoke`, {
     method: "POST",
     headers: {
-      Authorization: `Client ${getSquareAppSecret()}`,
+      Authorization: `Client ${getSquareAppSecret(pluginId)}`,
       "Content-Type": "application/json",
       "Square-Version": squareVersion
     },
     body: JSON.stringify({
       access_token: accessToken,
-      client_id: getSquareAppId(),
+      client_id: getSquareAppId(pluginId),
       revoke_only_access_token: false
     })
   });
@@ -564,14 +614,14 @@ export async function revokeSquareAccessToken(accessToken: string) {
   throw new Error(`Square token revoke failed with status ${response.status}.`);
 }
 
-export function isSquareConfigured() {
+export function isSquareConfigured(pluginId: SquarePluginId) {
   return Boolean(
-    getSquareAppId() &&
-      getSquareAppSecret() &&
-      getSquareRedirectUri()
+    getSquareAppId(pluginId) &&
+      getSquareAppSecret(pluginId) &&
+      getSquareRedirectUri(pluginId)
   );
 }
 
-export function getSquareEnvironmentLabel() {
-  return getSquareEnvironment() === "sandbox" ? "Sandbox" : "Production";
+export function getSquareEnvironmentLabel(pluginId: SquarePluginId) {
+  return getSquareEnvironment(pluginId) === "sandbox" ? "Sandbox" : "Production";
 }

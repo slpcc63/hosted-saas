@@ -29,7 +29,7 @@ import {
   searchSquareTimecardsByWorkday,
   updateSquareTimecard
 } from "@/lib/square";
-import { getValidSquareConnectionByCustomerId } from "@/lib/square-connections";
+import { getValidSquareConnection } from "@/lib/square-connections";
 import { isTimeCardSmsLive, sendTwilioMessage } from "@/lib/twilio";
 
 const timezoneFallback = "America/Los_Angeles";
@@ -234,7 +234,10 @@ async function detectForCustomer(settings: TimeCardConfirmationSettings, now: Da
   });
   if (!subscription) return { detected: 0, sent: 0, status: "no_subscription" };
 
-  const connection = await getValidSquareConnectionByCustomerId(settings.customerId);
+  const connection = await getValidSquareConnection({
+    customerId: settings.customerId,
+    pluginId: "square-time-card-manager"
+  });
   if (!connection || !hasSquareScopes(connection.authorizedScopes, ["TIMECARDS_READ"])) {
     return { detected: 0, sent: 0, status: "square_read_unavailable" };
   }
@@ -633,7 +636,10 @@ export async function applyApprovedMissingPunch(input: { customerId: string; req
   if (process.env.TIME_CARD_SQUARE_WRITES_LIVE !== "true") {
     return { status: "review_required_square_writes_disabled" };
   }
-  const connection = await getValidSquareConnectionByCustomerId(input.customerId);
+  const connection = await getValidSquareConnection({
+    customerId: input.customerId,
+    pluginId: "square-time-card-manager"
+  });
   if (!connection || !hasSquareScopes(connection.authorizedScopes, ["TIMECARDS_WRITE"])) {
     await db.query(`update public.time_card_missing_punches set status = 'apply_failed', square_error = 'Square write access is not authorized', updated_at = now() where id = $1`, [row.id]);
     return { status: "review_required_square_write_scope" };

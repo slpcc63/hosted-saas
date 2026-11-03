@@ -409,3 +409,69 @@ test("Calendar Sync initializes customer profiles before its foreign-key tables"
   assert.ok(customerProfilesCall > initializerStart);
   assert.ok(calendarTablesCall > customerProfilesCall);
 });
+
+test("Square connections are stored and selected per product", async () => {
+  const source = await readFile(
+    new URL("../lib/square-connections.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /plugin_id text/);
+  assert.match(
+    source,
+    /square_connections_customer_plugin_idx[\s\S]*customer_id, plugin_id/
+  );
+  assert.match(source, /where customer_id = \$1 and plugin_id = \$2/);
+  assert.match(source, /on conflict \(customer_id, plugin_id\)/);
+  assert.match(source, /TCM[\s\S]*never falls back/);
+  assert.match(source, /where customer_id = \$1 and plugin_id is null/);
+  assert.doesNotMatch(
+    source,
+    /create unique index if not exists square_connections_customer_id_idx/
+  );
+});
+
+test("Calendar disconnect deletes only the Calendar Sync connection", async () => {
+  const source = await readFile(
+    new URL("../lib/square-calendar-sink.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /getSquareConnection\(\{ customerId, pluginId \}\)/);
+  assert.match(source, /revokeSquareAccessToken\(pluginId, accessToken\)/);
+  assert.match(
+    source,
+    /delete from public\.square_connections[\s\S]*plugin_id = \$2 or \(plugin_id is null and \$2 = 'square-calendar-sink'\)/
+  );
+});
+
+test("Time Card workflows request only the Time Card Manager connection", async () => {
+  const sources = await Promise.all([
+    "../lib/square-time-card-manager.ts",
+    "../lib/time-card-email-workflow.ts",
+    "../lib/time-card-missing-punch-workflow.ts"
+  ].map((path) => readFile(new URL(path, import.meta.url), "utf8")));
+
+  for (const source of sources) {
+    assert.match(source, /get(?:Valid)?SquareConnection\(\{/);
+    assert.match(
+      source,
+      /pluginId(?:: "square-time-card-manager"|\s*\})/
+    );
+    assert.doesNotMatch(source, /getValidSquareConnectionByCustomerId/);
+  }
+});
+
+test("Square OAuth supports independent product application settings", async () => {
+  const source = await readFile(
+    new URL("../lib/square.ts", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /"square-calendar-sink": "CALENDAR_SYNC"/);
+  assert.match(source, /"square-time-card-manager": "TIME_CARD_MANAGER"/);
+  assert.match(source, /TCM must never silently reuse/);
+  assert.match(source, /getSquareAuthorizationUrl\(pluginId: SquarePluginId/);
+  assert.match(source, /getSquareAppSecret\(pluginId\)/);
+  assert.match(source, /revokeSquareAccessToken\([\s\S]*pluginId: SquarePluginId/);
+});
