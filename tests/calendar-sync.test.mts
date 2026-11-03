@@ -431,6 +431,22 @@ test("Square connections are stored and selected per product", async () => {
   );
 });
 
+test("Square connection separation has an explicit repeatable migration", async () => {
+  const migration = await readFile(
+    new URL(
+      "../supabase/migrations/20261103010000_split_square_connections.sql",
+      import.meta.url
+    ),
+    "utf8"
+  );
+
+  assert.match(migration, /add column if not exists plugin_id text/);
+  assert.match(migration, /square_connections_plugin_id_check/);
+  assert.match(migration, /drop index if exists public\.square_connections_customer_id_idx/);
+  assert.match(migration, /square_connections_customer_plugin_idx/);
+  assert.match(migration, /square_connections_legacy_customer_idx/);
+});
+
 test("Calendar disconnect deletes only the Calendar Sync connection", async () => {
   const source = await readFile(
     new URL("../lib/square-calendar-sink.ts", import.meta.url),
