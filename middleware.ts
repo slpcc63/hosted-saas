@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const appSubdomain = process.env.APP_SUBDOMAIN ?? "app";
-const rootDomain = process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "slpcc63.com";
+import { getApplicationRewritePath, isApplicationHostname } from "@/lib/product-host";
 const publicAppPaths = new Set([
   "/privacy",
   "/terms",
@@ -10,14 +9,6 @@ const publicAppPaths = new Set([
 
 function getHostname(request: NextRequest) {
   return request.headers.get("host")?.split(":")[0] ?? "";
-}
-
-function isAppHostname(hostname: string) {
-  if (hostname === `${appSubdomain}.${rootDomain}`) {
-    return true;
-  }
-
-  return hostname === `${appSubdomain}.localhost`;
 }
 
 export function middleware(request: NextRequest) {
@@ -32,7 +23,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  if (!isAppHostname(hostname)) {
+  if (!isApplicationHostname(hostname)) {
     return NextResponse.next();
   }
 
@@ -45,7 +36,7 @@ export function middleware(request: NextRequest) {
   }
 
   const rewriteUrl = request.nextUrl.clone();
-  rewriteUrl.pathname = pathname === "/" ? "/app" : `/app${pathname}`;
+  rewriteUrl.pathname = getApplicationRewritePath(pathname, hostname);
 
   return NextResponse.rewrite(rewriteUrl);
 }

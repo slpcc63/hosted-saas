@@ -2,8 +2,7 @@ import "server-only";
 
 import { Pool } from "pg";
 
-const localDatabaseUrl =
-  "postgresql://postgres:postgres@127.0.0.1:5432/slpcc63?sslmode=disable";
+import { selectDatabaseUrl } from "@/lib/database-url";
 
 function normalizeDatabaseUrl(value: string) {
   try {
@@ -21,9 +20,7 @@ function normalizeDatabaseUrl(value: string) {
 }
 
 const databaseUrl = normalizeDatabaseUrl(
-  process.env.DATABASE_URL ??
-  process.env.DATABASE_URL_UNPOOLED ??
-  localDatabaseUrl
+  selectDatabaseUrl()
 );
 
 export const db = new Pool({
