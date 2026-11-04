@@ -312,8 +312,8 @@ export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkMana
           <details className="dashboard-card calendar-delete-controls">
             <summary>Disconnect Square</summary>
             <p>
-              This revokes this company&apos;s Square authorization and pauses every employee calendar.
-              Other features that use this Square connection will also stop until a manager reconnects.
+              This revokes only Calendar Sync&apos;s Square authorization and pauses every employee calendar.
+              Time Card Manager and other products keep their own Square connections.
             </p>
             <form action={disconnectSquareCalendarSinkAction}>
               <button className="pill pill-button calendar-danger-button" type="submit">
