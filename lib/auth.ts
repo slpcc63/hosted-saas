@@ -1,12 +1,13 @@
 import { betterAuth } from "better-auth";
 
+import { getEmailAndPasswordConfig } from "@/lib/auth-password-config";
+import { getGoogleProviderConfig } from "@/lib/auth-provider-config";
+import { sendPasswordResetEmail } from "@/lib/auth-recovery";
 import { db } from "@/lib/db";
 import { getAppOrigin, getBetterAuthOrigin, getMarketingOrigin } from "@/lib/deployment";
 
 const authSecret =
   process.env.BETTER_AUTH_SECRET ?? "slpcc63-local-dev-secret-change-before-prod";
-const googleClientId = process.env.GOOGLE_CLIENT_ID;
-const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const appUrl = getAppOrigin();
 const marketingUrl = getMarketingOrigin();
 
@@ -16,19 +17,13 @@ export const auth = betterAuth({
   baseURL: getBetterAuthOrigin(),
   trustedOrigins: [appUrl, marketingUrl],
   database: db,
-  emailAndPassword: {
-    enabled: true,
-    autoSignIn: true,
-    requireEmailVerification: false
-  },
-  socialProviders:
-    googleClientId && googleClientSecret
-      ? {
-          google: {
-            clientId: googleClientId,
-            clientSecret: googleClientSecret,
-            prompt: "select_account"
-          }
-        }
-      : {}
+  emailAndPassword: getEmailAndPasswordConfig(
+    async ({ user, url }) => {
+      await sendPasswordResetEmail({ user, url });
+    }
+  ),
+  socialProviders: getGoogleProviderConfig({
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET
+  })
 });
