@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 
 import { AuthForm } from "@/components/auth/auth-form";
 import { SiteHeader } from "@/components/site-header";
+import { isGoogleAuthConfigured } from "@/lib/auth-provider-config";
+import { getSafeLocalRedirect } from "@/lib/auth-redirect";
 import { isPreviewDeployment } from "@/lib/deployment";
 import { getPublicRouting } from "@/lib/request-routing";
 import { getServerSession } from "@/lib/auth/server";
@@ -15,16 +17,18 @@ type SignInPageProps = {
 export default async function SignInPage({ searchParams }: SignInPageProps) {
   const session = await getServerSession();
   const routing = await getPublicRouting();
-  const googleEnabled = Boolean(
-    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-  ) && !isPreviewDeployment();
+  const googleEnabled = isGoogleAuthConfigured({
+    GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID,
+    GOOGLE_CLIENT_SECRET: process.env.GOOGLE_CLIENT_SECRET
+  });
 
   if (session?.user) {
     redirect(routing.dashboardPath);
   }
 
   const params = await searchParams;
-  const nextPath = params?.next?.startsWith("/") ? params.next : routing.dashboardPath;
+  const nextPath = getSafeLocalRedirect(params?.next, routing.dashboardPath);
+  const resetPath = routing.appHost ? "/reset-password" : "/app/reset-password";
 
   return (
     <>
@@ -38,7 +42,11 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               Better Auth is now wired in for email/password authentication,
               and Google sign-in can be enabled from your environment settings.
             </p>
-            <AuthForm googleEnabled={googleEnabled} nextPath={nextPath} />
+            <AuthForm
+              googleEnabled={googleEnabled}
+              nextPath={nextPath}
+              resetPath={resetPath}
+            />
           </article>
 
           <aside className="dashboard-card auth-card">
@@ -75,9 +83,9 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
             </div>
             {isPreviewDeployment() ? (
               <p>
-                Preview deployments stay on their Vercel URL, so Google sign-in
-                is hidden there unless you explicitly register that preview URL
-                in Google Cloud.
+                Google sign-in is available on a preview only when that exact
+                preview callback URL is registered in Google Cloud. Prefer a
+                stable preview alias instead of registering every generated URL.
               </p>
             ) : null}
           </aside>

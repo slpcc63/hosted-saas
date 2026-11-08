@@ -5,14 +5,16 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
+import { runGoogleSignIn } from "@/lib/google-sign-in";
 
 type AuthFormProps = {
   googleEnabled: boolean;
   nextPath: string;
+  resetPath: string;
 };
 
-export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-up");
+export function AuthForm({ googleEnabled, nextPath, resetPath }: AuthFormProps) {
+  const [mode, setMode] = useState<"forgot-password" | "sign-in" | "sign-up">("sign-up");
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,18 +36,41 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
     }
 
     setIsSubmitting(true);
-    setStatusMessage(mode === "sign-up" ? "Creating your account..." : "Signing you in...");
+    setStatusMessage(
+      mode === "sign-up"
+        ? "Creating your account..."
+        : mode === "sign-in"
+          ? "Signing you in..."
+          : "Sending reset instructions..."
+    );
 
     try {
-      const response =
-        mode === "sign-up"
-          ? await authClient.signUp.email({
+      if (mode === "forgot-password") {
+        const response = await authClient.requestPasswordReset({
+          email,
+          redirectTo: resetPath
+        });
+
+        if (response.error) {
+          setError(response.error.message ?? "Unable to send reset instructions.");
+          setStatusMessage(null);
+          return;
+        }
+
+        setStatusMessage(
+          "If an account exists for that email, password reset instructions are on the way."
+        );
+        return;
+      }
+
+      const response = mode === "sign-up"
+        ? await authClient.signUp.email({
               email,
               password,
               name,
               callbackURL: nextPath
             })
-          : await authClient.signIn.email({
+        : await authClient.signIn.email({
               email,
               password,
               callbackURL: nextPath
@@ -71,26 +96,18 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
 
   return (
     <div>
-      {googleEnabled ? (
+      {googleEnabled && mode !== "forgot-password" ? (
         <>
           <button
             className="pill social-button"
             disabled={isSubmitting}
             onClick={() => {
-              setError(null);
-              setStatusMessage("Redirecting to Google...");
-              setIsSubmitting(true);
-              void (async () => {
-                const response = await authClient.signIn.social({
-                  provider: "google",
-                  callbackURL: nextPath
-                });
-
-                if (response.error) {
-                  setError(response.error.message ?? "Google sign-in failed.");
-                  setStatusMessage(null);
-                  setIsSubmitting(false);
-                }
+              void runGoogleSignIn({
+                callbackURL: nextPath,
+                onError: setError,
+                onStatusChange: setStatusMessage,
+                onSubmittingChange: setIsSubmitting,
+                signIn: authClient.signIn.social
               });
             }}
             type="button"
@@ -146,18 +163,20 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
             required
           />
         </label>
-        <label className="field">
-          <span>Password</span>
-          <input
-            autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
-            disabled={isSubmitting}
-            minLength={8}
-            name="password"
-            placeholder="At least 8 characters"
-            type="password"
-            required
-          />
-        </label>
+        {mode !== "forgot-password" ? (
+          <label className="field">
+            <span>Password</span>
+            <input
+              autoComplete={mode === "sign-up" ? "new-password" : "current-password"}
+              disabled={isSubmitting}
+              minLength={8}
+              name="password"
+              placeholder="At least 8 characters"
+              type="password"
+              required
+            />
+          </label>
+        ) : null}
         {statusMessage ? (
           <p aria-live="polite" className="form-success">
             {statusMessage}
@@ -169,14 +188,48 @@ export function AuthForm({ googleEnabled, nextPath }: AuthFormProps) {
             ? "Working..."
             : mode === "sign-up"
               ? "Create account"
-              : "Sign in"}
+              : mode === "sign-in"
+                ? "Sign in"
+                : "Send reset link"}
         </button>
       </form>
 
+      {mode === "sign-in" ? (
+        <button
+          className="pill-button"
+          disabled={isSubmitting}
+          onClick={() => {
+            setMode("forgot-password");
+            setError(null);
+            setStatusMessage(null);
+          }}
+          type="button"
+        >
+          Forgot your password?
+        </button>
+      ) : null}
+
+      {mode === "forgot-password" ? (
+        <button
+          className="pill-button"
+          disabled={isSubmitting}
+          onClick={() => {
+            setMode("sign-in");
+            setError(null);
+            setStatusMessage(null);
+          }}
+          type="button"
+        >
+          Back to sign in
+        </button>
+      ) : null}
+
       <p className="auth-helper">
         {mode === "sign-up"
-          ? "This will create the first real app user in the Better Auth database."
-          : "Use the account you created here to access the protected app routes."}
+          ? "Create your app account with email and password."
+          : mode === "sign-in"
+            ? "Use your account to access the protected app routes."
+            : "For privacy, the same confirmation appears whether or not the email is registered."}
       </p>
       <Link className="pill" href={nextPath}>
         Dashboard after sign-in
