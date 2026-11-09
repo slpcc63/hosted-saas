@@ -38,7 +38,7 @@ function buildContract(product: "calendar-sync" | "time-card-manager") {
   ) as { buildKind: string; claim: string; currentRuntimeStatus: string; contract: ProductContract };
 }
 
-test("Calendar Sync contract builds without Time Card Manager runtime or secrets", () => {
+test("Calendar Sync contract declares no Time Card Manager runtime modules or secret names", () => {
   const manifest = buildContract("calendar-sync");
   assert.equal(manifest.buildKind, "local-product-boundary-contract");
   assert.equal(manifest.contract.ownedPluginId, "square-calendar-sink");
@@ -48,7 +48,7 @@ test("Calendar Sync contract builds without Time Card Manager runtime or secrets
   assert.match(manifest.claim, /not a standalone Next\.js deployment/);
 });
 
-test("Time Card Manager contract builds without Calendar Sync runtime or secrets", () => {
+test("Time Card Manager contract declares no Calendar Sync runtime modules or secret names", () => {
   const manifest = buildContract("time-card-manager");
   assert.equal(manifest.buildKind, "local-product-boundary-contract");
   assert.equal(manifest.contract.ownedPluginId, "square-time-card-manager");
