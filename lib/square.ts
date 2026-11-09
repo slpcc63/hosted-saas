@@ -3,6 +3,12 @@ import "server-only";
 import { collectSquarePages } from "@/lib/square-pagination";
 import { classifySquareRevocationResponse } from "@/lib/square-disconnect";
 import type { SquarePluginId } from "@/lib/square-plugin-installations";
+import { getProductRuntime } from "@/lib/product-runtime";
+import {
+  getRuntimePluginId,
+  getSquareProductEnvironmentValue,
+  getSquareProductRedirectUri
+} from "@/lib/square-product-config";
 
 export type SquareEnvironment = "production" | "sandbox";
 
@@ -21,33 +27,12 @@ const defaultSquareScopes: Record<SquarePluginId, string[]> = {
   ]
 };
 
-const squarePluginEnvironmentPrefixes: Record<SquarePluginId, string> = {
-  "square-calendar-sink": "CALENDAR_SYNC",
-  "square-time-card-manager": "TIME_CARD_MANAGER"
-};
-
-function getSquarePluginEnvironmentValue(pluginId: SquarePluginId, name: string) {
-  const prefix = squarePluginEnvironmentPrefixes[pluginId];
-  const productValue = process.env[`${prefix}_SQUARE_${name}`];
-
-  if (productValue !== undefined) {
-    return productValue;
-  }
-
-  // Calendar Sync owns the legacy connection and keeps the unprefixed values
-  // until its controlled environment migration. TCM must never silently reuse
-  // those credentials, because revoking one shared Square authorization would
-  // break both products again.
-  if (pluginId === "square-calendar-sink") {
-    return process.env[`SQUARE_${name}`] ?? "";
-  }
-
-  return "";
-}
-
 function getSquareEnvironment(pluginId?: SquarePluginId): SquareEnvironment {
-  const configured = pluginId
-    ? getSquarePluginEnvironmentValue(pluginId, "ENVIRONMENT")
+  const runtime = getProductRuntime();
+  const runtimePluginId = runtime ? getRuntimePluginId(runtime) : undefined;
+  const configuredPluginId = pluginId ?? runtimePluginId;
+  const configured = configuredPluginId
+    ? getSquareProductEnvironmentValue(configuredPluginId, "ENVIRONMENT")
     : process.env.SQUARE_ENVIRONMENT;
 
   return configured === "sandbox"
@@ -62,27 +47,19 @@ export function getSquareBaseUrl(pluginId?: SquarePluginId) {
 }
 
 export function getSquareAppId(pluginId: SquarePluginId) {
-  return getSquarePluginEnvironmentValue(pluginId, "APPLICATION_ID");
+  return getSquareProductEnvironmentValue(pluginId, "APPLICATION_ID");
 }
 
 export function getSquareAppSecret(pluginId: SquarePluginId) {
-  return getSquarePluginEnvironmentValue(pluginId, "APPLICATION_SECRET");
+  return getSquareProductEnvironmentValue(pluginId, "APPLICATION_SECRET");
 }
 
 export function getSquareRedirectUri(pluginId: SquarePluginId) {
-  const configured = getSquarePluginEnvironmentValue(pluginId, "REDIRECT_URI");
-
-  if (configured) {
-    return configured;
-  }
-
-  return pluginId === "square-calendar-sink"
-    ? "https://hosted-saas.vercel.app/api/integrations/square/callback"
-    : "";
+  return getSquareProductRedirectUri(pluginId);
 }
 
 export function getSquareScopes(pluginId: SquarePluginId) {
-  const configuredScopes = getSquarePluginEnvironmentValue(pluginId, "SCOPES").trim();
+  const configuredScopes = getSquareProductEnvironmentValue(pluginId, "SCOPES").trim();
 
   if (!configuredScopes) {
     return defaultSquareScopes[pluginId];

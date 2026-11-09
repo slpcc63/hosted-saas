@@ -14,10 +14,14 @@
     "test:auth": "node --no-warnings --experimental-strip-types --test tests/auth-recovery-flow.test.mts tests/auth-recovery.test.mts tests/customer-profile-initialization.test.mts tests/google-sign-in.test.mts",
     "test:auth-wrapper": "node --no-warnings --experimental-strip-types --test tests/current-customer-wrapper.test.mts",
     "test:product-boundaries": "node --no-warnings --experimental-strip-types --test tests/product-boundaries.test.mts",
-    "build:calendar-sync:contract": "npm --prefix products/calendar-sync run build",
-    "build:time-card-manager:contract": "npm --prefix products/time-card-manager run build",
+    "test:product-runtime-isolation": "node --no-warnings --experimental-strip-types --test tests/product-runtime-isolation.test.mts",
+    "test:product-mutation-isolation": "node --no-warnings --experimental-strip-types --test tests/product-mutation-isolation.integration.mts",
+    "build:calendar-sync": "npm --prefix products/calendar-sync run build",
+    "build:time-card-manager": "npm --prefix products/time-card-manager run build",
+    "build:calendar-sync:contract": "npm --prefix products/calendar-sync run build:contract",
+    "build:time-card-manager:contract": "npm --prefix products/time-card-manager run build:contract",
     "build:product-contracts": "npm run build:calendar-sync:contract && npm run build:time-card-manager:contract",
-    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper && npm run test:product-boundaries",
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper && npm run test:product-boundaries && npm run test:product-runtime-isolation",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

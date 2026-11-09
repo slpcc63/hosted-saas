@@ -25,7 +25,7 @@ function readContract(product: "calendar-sync" | "time-card-manager") {
 function buildContract(product: "calendar-sync" | "time-card-manager") {
   const productRoot = resolve(root, "products", product);
   rmSync(resolve(productRoot, ".build"), { recursive: true, force: true });
-  execFileSync("npm", ["run", "build"], {
+  execFileSync("npm", ["run", "build:contract"], {
     cwd: productRoot,
     env: {
       PATH: process.env.PATH ?? "",
@@ -38,21 +38,21 @@ function buildContract(product: "calendar-sync" | "time-card-manager") {
   ) as { buildKind: string; claim: string; currentRuntimeStatus: string; contract: ProductContract };
 }
 
-test("Calendar Sync contract declares no Time Card Manager runtime modules or secret names", () => {
+test("Calendar Sync contract-consistency manifest excludes Time Card Manager declarations", () => {
   const manifest = buildContract("calendar-sync");
   assert.equal(manifest.buildKind, "local-product-boundary-contract");
   assert.equal(manifest.contract.ownedPluginId, "square-calendar-sink");
-  assert.equal(manifest.currentRuntimeStatus, "shared-root-not-independent");
+  assert.equal(manifest.currentRuntimeStatus, "independent-local-build-root");
   assert.ok(manifest.contract.runtimeModules.every((path) => !path.includes("time-card")));
   assert.ok(manifest.contract.requiredEnvironment.every((key) => !key.startsWith("TIME_CARD_MANAGER_")));
   assert.match(manifest.claim, /not a standalone Next\.js deployment/);
 });
 
-test("Time Card Manager contract declares no Calendar Sync runtime modules or secret names", () => {
+test("Time Card Manager contract-consistency manifest excludes Calendar Sync declarations", () => {
   const manifest = buildContract("time-card-manager");
   assert.equal(manifest.buildKind, "local-product-boundary-contract");
   assert.equal(manifest.contract.ownedPluginId, "square-time-card-manager");
-  assert.equal(manifest.currentRuntimeStatus, "shared-root-not-independent");
+  assert.equal(manifest.currentRuntimeStatus, "independent-local-build-root");
   assert.ok(manifest.contract.runtimeModules.every((path) => !path.includes("calendar")));
   assert.ok(manifest.contract.requiredEnvironment.every((key) => !key.startsWith("CALENDAR_SYNC_")));
   assert.match(manifest.claim, /not a standalone Next\.js deployment/);

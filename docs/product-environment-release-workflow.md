@@ -2,19 +2,22 @@
 
 ## Status of this cutoff
 
-This checkpoint records executable product boundary contracts and a release
-workflow. It does **not** complete the extension split. Both products still run
-inside the root Next.js application, use one root `package.json`, and deploy
-through one Vercel project. The accepted Square Sandbox disconnect evidence at
-commit `8c43bc1` proves authorization and stored-connection isolation only.
+This checkpoint now contains two real local Next.js application roots and two
+independent framework builds. Cadence and Sentinel each expose their owned UI,
+API, OAuth and compatibility routes; select only their owned database,
+encryption key and Square settings; and reject cross-product plugin access.
+The local builds passed with the other product's variables absent. A guarded
+synthetic PostgreSQL integration test also proves Calendar connection deletion
+leaves the same customer's Sentinel connection row intact.
 
-The remaining full local extraction is estimated at **6–8 additional Codex
-points** after this checkpoint: move each product's pages, APIs and runtime into
-its own application root; replace shared database and encryption settings with
-product-owned settings; introduce a side-effect-free shared identity package;
-and pass two real Next.js builds plus isolation regression tests. Separate
-Vercel projects, domains, provider configuration, migration and production
-cutover are later approval-gated work.
+This is **local extraction acceptance, not deployment independence**. Both
+application roots remain in one repository, consume reviewed common source
+from the repository root, use the root dependency installation, and have not
+been assigned separate Vercel projects, domains, provider configuration,
+release histories or rollback targets. The accepted Square Sandbox disconnect
+evidence at commit `8c43bc1` remains the end-to-end provider proof; this
+checkpoint adds local build, routing, import, configuration and database
+mutation evidence without repeating that external exercise.
 
 ## Source and branch model
 
@@ -35,18 +38,20 @@ cutover are later approval-gated work.
 
 ## Target application roots
 
-- `products/calendar-sync`: Cadence build root. It will own Calendar pages,
+- `products/calendar-sync`: Cadence build root. It owns Calendar pages,
   feed APIs, Square callback/disconnect handling and Calendar workers.
-- `products/time-card-manager`: Sentinel build root. It will own manager and
+- `products/time-card-manager`: Sentinel build root. It owns manager and
   employee pages, Square callback/disconnect handling, email/SMS workflows and
   scheduled runners.
 - `packages/*`: reviewed side-effect-free schemas, identity types and UI
   primitives only. A package that opens a database or calls a provider belongs
   to one product, not `packages`.
 
-The current `product.json` files are executable target contracts. Their builds
-do not consume provider secrets and deliberately cannot be mistaken for a full
-Next.js application build.
+The current `product.json` files remain contract-consistency artifacts through
+`npm run build:contract`. `npm run build` in either product directory is now a
+real framework build. Contract checks must not be reported as runtime proof;
+the framework builds, transitive graph tests, routing smoke tests and guarded
+database integration test are separate evidence.
 
 ## Environment and data ownership
 
@@ -75,6 +80,13 @@ For every candidate:
 5. Confirm disconnect/delete/revoke statements include the owned plugin ID and
    cannot select or mutate the other product's rows.
 6. Record the exact commit, build output hash, tests and database fixture.
+
+For the local extraction checkpoint, run `npm run test:product-runtime-isolation`
+for graph/routing/configuration enforcement and run the guarded PostgreSQL test
+only against a disposable loopback database whose name and explicit
+`SPLIT_ISOLATION_CONFIRM_DATABASE` value both match `cadence_build` or
+`sentinel_build`. The test uses transactional DDL and rollback and refuses a
+database that already contains `public.square_connections`.
 
 Until separate QA projects exist, only one named candidate may own the temporary
 shared QA alias at a time. Record the prior alias target, candidate commit and

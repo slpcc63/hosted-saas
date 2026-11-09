@@ -15,6 +15,7 @@ import {
   SquarePluginId,
   squarePluginIds
 } from "@/lib/square-plugin-installations";
+import { deleteOwnedSquareConnection } from "@/lib/square-connection-mutations";
 
 export type SquareConnection = {
   accessToken: string;
@@ -351,13 +352,9 @@ export async function removeSquareConnection(input: {
     return null;
   }
 
-  const result = await db.query(
-    `delete from public.square_connections
-     where customer_id = $1
-       and (plugin_id = $2 or (plugin_id is null and $2 = 'square-calendar-sink'))
-       and id = $3
-     returning id`,
-    [input.customerId, input.pluginId, connection.id]
+  const result = await deleteOwnedSquareConnection(
+    (statement, values) => db.query(statement, values),
+    { ...input, connectionId: connection.id }
   );
 
   if (!result.rows[0]) {

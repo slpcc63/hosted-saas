@@ -4,6 +4,11 @@ import {
   randomBytes
 } from "node:crypto";
 
+import {
+  getProductEnvironmentPrefix,
+  getProductRuntime
+} from "./product-runtime.ts";
+
 const algorithm = "aes-256-gcm";
 const envelopePrefix = "sqtoken:v1";
 const keyByteLength = 32;
@@ -17,7 +22,17 @@ export class SquareTokenEncryptionError extends Error {
   }
 }
 
-function getEncryptionKey(encodedKey = process.env.SQUARE_TOKEN_ENCRYPTION_KEY) {
+function getConfiguredEncryptionKey() {
+  const runtime = getProductRuntime();
+
+  if (!runtime) {
+    return process.env.SQUARE_TOKEN_ENCRYPTION_KEY;
+  }
+
+  return process.env[`${getProductEnvironmentPrefix(runtime)}_SQUARE_TOKEN_ENCRYPTION_KEY`];
+}
+
+function getEncryptionKey(encodedKey = getConfiguredEncryptionKey()) {
   if (!encodedKey?.trim()) {
     throw new SquareTokenEncryptionError("Square token encryption key is not configured.");
   }

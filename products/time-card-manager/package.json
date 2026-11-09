@@ -1,8 +1,11 @@
 {
-  "name": "@slpcc63/time-card-manager-boundary",
+  "name": "@slpcc63/time-card-manager",
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "node ../../packages/product-contract/build.mjs product.json .build/product-manifest.json"
+    "build": "../../node_modules/.bin/next build",
+    "build:contract": "node ../../packages/product-contract/build.mjs product.json .build/product-manifest.json",
+    "start": "../../node_modules/.bin/next start",
+    "typecheck": "../../node_modules/.bin/tsc --noEmit --project tsconfig.json"
   }
 }

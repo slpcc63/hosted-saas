@@ -2,8 +2,8 @@
   "technicalId": "calendar-sync",
   "displayName": "Cadence",
   "ownedPluginId": "square-calendar-sink",
-  "sourceRoot": "app/app/calendar-sink",
-  "currentRuntimeStatus": "shared-root-not-independent",
+  "sourceRoot": "products/calendar-sync/app",
+  "currentRuntimeStatus": "independent-local-build-root",
   "runtimeModules": [
     "lib/square-calendar-sink.ts",
     "lib/square-calendar-sink-delivery.ts"

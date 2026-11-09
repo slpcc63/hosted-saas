@@ -10,6 +10,7 @@ import {
   getValidSquareConnection
 } from "@/lib/square-connections";
 import { disconnectSquareAuthorization } from "@/lib/square-disconnect";
+import { deleteOwnedSquareConnection } from "@/lib/square-connection-mutations";
 import {
   SquarePluginId,
   removeSquarePluginInstallation,
@@ -312,12 +313,9 @@ export async function disconnectSquareCalendarSink(customerId: string) {
         );
 
         if (connectionId) {
-          await client.query(
-            `delete from public.square_connections
-             where customer_id = $1
-               and (plugin_id = $2 or (plugin_id is null and $2 = 'square-calendar-sink'))
-               and id = $3`,
-            [customerId, pluginId, connectionId]
+          await deleteOwnedSquareConnection(
+            (statement, values) => client.query(statement, values),
+            { customerId, pluginId, connectionId }
           );
         }
 

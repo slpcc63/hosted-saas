@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 
 import { db } from "@/lib/db";
+import { ensureCustomerProfilesTable } from "@/lib/customers";
 import { getAppOrigin } from "@/lib/deployment";
 import { sendTransactionalEmail } from "@/lib/email";
 import { getValidSquareConnection } from "@/lib/square-connections";
@@ -273,6 +274,8 @@ function mapRequest(row: Record<string, unknown>): TimeCardConfirmationRequest {
 }
 
 export async function ensureTimeCardEmailWorkflowTables() {
+  await ensureCustomerProfilesTable();
+
   if (!workflowTablesReady) {
     workflowTablesReady = db.query(`
       create extension if not exists pgcrypto;

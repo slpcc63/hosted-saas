@@ -448,15 +448,15 @@ test("Square connection separation has an explicit repeatable migration", async 
 });
 
 test("Calendar disconnect deletes only the Calendar Sync connection", async () => {
-  const source = await readFile(
-    new URL("../lib/square-calendar-sink.ts", import.meta.url),
-    "utf8"
-  );
+  const [source, mutation] = await Promise.all([
+    readFile(new URL("../lib/square-calendar-sink.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/square-connection-mutations.ts", import.meta.url), "utf8")
+  ]);
 
   assert.match(source, /getSquareConnection\(\{ customerId, pluginId \}\)/);
   assert.match(source, /revokeSquareAccessToken\(pluginId, accessToken\)/);
   assert.match(
-    source,
+    mutation,
     /delete from public\.square_connections[\s\S]*plugin_id = \$2 or \(plugin_id is null and \$2 = 'square-calendar-sink'\)/
   );
 });
@@ -479,14 +479,14 @@ test("Time Card workflows request only the Time Card Manager connection", async 
 });
 
 test("Square OAuth supports independent product application settings", async () => {
-  const source = await readFile(
-    new URL("../lib/square.ts", import.meta.url),
-    "utf8"
-  );
+  const [source, config] = await Promise.all([
+    readFile(new URL("../lib/square.ts", import.meta.url), "utf8"),
+    readFile(new URL("../lib/square-product-config.ts", import.meta.url), "utf8")
+  ]);
 
-  assert.match(source, /"square-calendar-sink": "CALENDAR_SYNC"/);
-  assert.match(source, /"square-time-card-manager": "TIME_CARD_MANAGER"/);
-  assert.match(source, /TCM must never silently reuse/);
+  assert.match(config, /pluginId === "square-calendar-sink"[\s\S]*"CALENDAR_SYNC"[\s\S]*"TIME_CARD_MANAGER"/);
+  assert.match(config, /Only the legacy shared-root runtime/);
+  assert.match(config, /runtime cannot access/);
   assert.match(source, /getSquareAuthorizationUrl\(pluginId: SquarePluginId/);
   assert.match(source, /getSquareAppSecret\(pluginId\)/);
   assert.match(source, /revokeSquareAccessToken\([\s\S]*pluginId: SquarePluginId/);

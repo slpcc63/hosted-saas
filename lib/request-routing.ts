@@ -4,19 +4,23 @@ import { headers } from "next/headers";
 
 import { getMarketingOrigin, isPreviewDeployment } from "@/lib/deployment";
 import { isApplicationHostname, isTimeCardManagerQaHostname } from "@/lib/product-host";
+import { getProductRuntime } from "@/lib/product-runtime";
+import { computePublicRouting } from "@/lib/public-routing";
 
 export async function getPublicRouting() {
   const requestHeaders = await headers();
   const hostname = requestHeaders.get("host")?.split(":")[0] ?? "";
-  const appHost = isApplicationHostname(hostname);
+  const hostMatchesApplication = isApplicationHostname(hostname);
   const timeCardManagerQaHost = isTimeCardManagerQaHostname(hostname);
   const preview = isPreviewDeployment() && hostname.endsWith(".vercel.app");
-
-  const appHomePath = appHost ? "/" : "/app";
-  const dashboardPath = timeCardManagerQaHost
-    ? "/time-card-manager"
-    : appHost ? "/dashboard" : "/app/dashboard";
-  const signInPath = `/sign-in?next=${encodeURIComponent(dashboardPath)}`;
+  const productRuntime = getProductRuntime();
+  const { appHomePath, appHost, dashboardPath, signInPath } = computePublicRouting({
+    appHost: hostMatchesApplication,
+    hostname,
+    preview,
+    productRuntime,
+    timeCardManagerQaHost
+  });
   const launchProductHref = timeCardManagerQaHost
     ? signInPath
     : preview

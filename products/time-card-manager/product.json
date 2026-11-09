@@ -2,8 +2,8 @@
   "technicalId": "time-card-manager",
   "displayName": "Sentinel",
   "ownedPluginId": "square-time-card-manager",
-  "sourceRoot": "app/app/time-card-manager",
-  "currentRuntimeStatus": "shared-root-not-independent",
+  "sourceRoot": "products/time-card-manager/app",
+  "currentRuntimeStatus": "independent-local-build-root",
   "runtimeModules": [
     "lib/square-time-card-manager.ts",
     "lib/time-card-email-workflow.ts",
