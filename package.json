@@ -13,7 +13,11 @@
     "test:tcm-qa": "node --no-warnings --experimental-strip-types --test tests/tcm-qa-routing.test.mts",
     "test:auth": "node --no-warnings --experimental-strip-types --test tests/auth-recovery-flow.test.mts tests/auth-recovery.test.mts tests/customer-profile-initialization.test.mts tests/google-sign-in.test.mts",
     "test:auth-wrapper": "node --no-warnings --experimental-strip-types --test tests/current-customer-wrapper.test.mts",
-    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper",
+    "test:product-boundaries": "node --no-warnings --experimental-strip-types --test tests/product-boundaries.test.mts",
+    "build:calendar-sync:contract": "npm --prefix products/calendar-sync run build",
+    "build:time-card-manager:contract": "npm --prefix products/time-card-manager run build",
+    "build:product-contracts": "npm run build:calendar-sync:contract && npm run build:time-card-manager:contract",
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper && npm run test:product-boundaries",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {

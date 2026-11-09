@@ -1,0 +1,33 @@
+{
+  "technicalId": "calendar-sync",
+  "displayName": "Cadence",
+  "ownedPluginId": "square-calendar-sink",
+  "sourceRoot": "app/app/calendar-sink",
+  "currentRuntimeStatus": "shared-root-not-independent",
+  "runtimeModules": [
+    "lib/square-calendar-sink.ts",
+    "lib/square-calendar-sink-delivery.ts"
+  ],
+  "requiredEnvironment": [
+    "CALENDAR_SYNC_DATABASE_URL",
+    "CALENDAR_SYNC_SQUARE_TOKEN_ENCRYPTION_KEY",
+    "CALENDAR_SYNC_SQUARE_ENVIRONMENT",
+    "CALENDAR_SYNC_SQUARE_APPLICATION_ID",
+    "CALENDAR_SYNC_SQUARE_APPLICATION_SECRET",
+    "CALENDAR_SYNC_SQUARE_REDIRECT_URI",
+    "CALENDAR_SYNC_SQUARE_SCOPES"
+  ],
+  "forbiddenEnvironment": [
+    "TIME_CARD_MANAGER_DATABASE_URL",
+    "TIME_CARD_MANAGER_SQUARE_TOKEN_ENCRYPTION_KEY",
+    "TIME_CARD_MANAGER_SQUARE_APPLICATION_ID",
+    "TIME_CARD_MANAGER_SQUARE_APPLICATION_SECRET"
+  ],
+  "sharedIdentityContract": [
+    "auth_user_id",
+    "customer_profile_id",
+    "display_name",
+    "email"
+  ],
+  "releaseBranchPrefix": "release/calendar-sync/"
+}

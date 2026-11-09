@@ -1,0 +1,34 @@
+{
+  "technicalId": "time-card-manager",
+  "displayName": "Sentinel",
+  "ownedPluginId": "square-time-card-manager",
+  "sourceRoot": "app/app/time-card-manager",
+  "currentRuntimeStatus": "shared-root-not-independent",
+  "runtimeModules": [
+    "lib/square-time-card-manager.ts",
+    "lib/time-card-email-workflow.ts",
+    "lib/time-card-missing-punch-workflow.ts"
+  ],
+  "requiredEnvironment": [
+    "TIME_CARD_MANAGER_DATABASE_URL",
+    "TIME_CARD_MANAGER_SQUARE_TOKEN_ENCRYPTION_KEY",
+    "TIME_CARD_MANAGER_SQUARE_ENVIRONMENT",
+    "TIME_CARD_MANAGER_SQUARE_APPLICATION_ID",
+    "TIME_CARD_MANAGER_SQUARE_APPLICATION_SECRET",
+    "TIME_CARD_MANAGER_SQUARE_REDIRECT_URI",
+    "TIME_CARD_MANAGER_SQUARE_SCOPES"
+  ],
+  "forbiddenEnvironment": [
+    "CALENDAR_SYNC_DATABASE_URL",
+    "CALENDAR_SYNC_SQUARE_TOKEN_ENCRYPTION_KEY",
+    "CALENDAR_SYNC_SQUARE_APPLICATION_ID",
+    "CALENDAR_SYNC_SQUARE_APPLICATION_SECRET"
+  ],
+  "sharedIdentityContract": [
+    "auth_user_id",
+    "customer_profile_id",
+    "display_name",
+    "email"
+  ],
+  "releaseBranchPrefix": "release/time-card-manager/"
+}
