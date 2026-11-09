@@ -4,18 +4,19 @@ import { getEmailAndPasswordConfig } from "@/lib/auth-password-config";
 import { getGoogleProviderConfig } from "@/lib/auth-provider-config";
 import { sendPasswordResetEmail } from "@/lib/auth-recovery";
 import { db } from "@/lib/db";
-import { getAppOrigin, getBetterAuthOrigin, getMarketingOrigin } from "@/lib/deployment";
+import {
+  getBetterAuthOrigin,
+  getBetterAuthTrustedOrigins
+} from "@/lib/deployment";
 
 const authSecret =
   process.env.BETTER_AUTH_SECRET ?? "slpcc63-local-dev-secret-change-before-prod";
-const appUrl = getAppOrigin();
-const marketingUrl = getMarketingOrigin();
 
 export const auth = betterAuth({
   appName: process.env.NEXT_PUBLIC_APP_NAME ?? "SLPCC63",
   secret: authSecret,
   baseURL: getBetterAuthOrigin(),
-  trustedOrigins: [appUrl, marketingUrl],
+  trustedOrigins: getBetterAuthTrustedOrigins(),
   database: db,
   emailAndPassword: getEmailAndPasswordConfig(
     async ({ user, url }) => {
