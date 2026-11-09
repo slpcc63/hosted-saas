@@ -203,3 +203,39 @@ test("legacy shared root alone retains the historical Calendar Square fallback",
     "https://legacy.invalid/callback"
   );
 });
+
+test("default selectors use the direct runtime marker while explicit environments stay injectable", () => {
+  const previousRuntime = process.env.SLPCC63_PRODUCT_RUNTIME;
+  const previousCalendarDatabase = process.env.CALENDAR_SYNC_DATABASE_URL;
+  const previousLegacyDatabase = process.env.DATABASE_URL;
+  const previousCalendarSquareId = process.env.CALENDAR_SYNC_SQUARE_APPLICATION_ID;
+  const previousLegacySquareId = process.env.SQUARE_APPLICATION_ID;
+
+  try {
+    process.env.SLPCC63_PRODUCT_RUNTIME = "calendar-sync";
+    process.env.CALENDAR_SYNC_DATABASE_URL = "postgresql://direct-calendar";
+    process.env.DATABASE_URL = "postgresql://legacy-forbidden";
+    process.env.CALENDAR_SYNC_SQUARE_APPLICATION_ID = "direct-calendar-id";
+    process.env.SQUARE_APPLICATION_ID = "legacy-forbidden-id";
+    assert.equal(selectDatabaseUrl(), "postgresql://direct-calendar");
+    assert.equal(
+      getSquareProductEnvironmentValue("square-calendar-sink", "APPLICATION_ID"),
+      "direct-calendar-id"
+    );
+    assert.throws(
+      () => getSquareProductEnvironmentValue("square-time-card-manager", "APPLICATION_ID"),
+      /cannot access/
+    );
+  } finally {
+    if (previousRuntime === undefined) delete process.env.SLPCC63_PRODUCT_RUNTIME;
+    else process.env.SLPCC63_PRODUCT_RUNTIME = previousRuntime;
+    if (previousCalendarDatabase === undefined) delete process.env.CALENDAR_SYNC_DATABASE_URL;
+    else process.env.CALENDAR_SYNC_DATABASE_URL = previousCalendarDatabase;
+    if (previousLegacyDatabase === undefined) delete process.env.DATABASE_URL;
+    else process.env.DATABASE_URL = previousLegacyDatabase;
+    if (previousCalendarSquareId === undefined) delete process.env.CALENDAR_SYNC_SQUARE_APPLICATION_ID;
+    else process.env.CALENDAR_SYNC_SQUARE_APPLICATION_ID = previousCalendarSquareId;
+    if (previousLegacySquareId === undefined) delete process.env.SQUARE_APPLICATION_ID;
+    else process.env.SQUARE_APPLICATION_ID = previousLegacySquareId;
+  }
+});

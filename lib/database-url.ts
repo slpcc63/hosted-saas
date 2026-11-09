@@ -16,15 +16,18 @@ type DatabaseEnvironment = {
 };
 
 export function selectDatabaseUrl(
-  environment: DatabaseEnvironment = process.env as DatabaseEnvironment
+  environment?: DatabaseEnvironment
 ) {
-  const runtime = getProductRuntime(environment);
+  const resolvedEnvironment = environment ?? process.env as DatabaseEnvironment;
+  const runtime = environment
+    ? getProductRuntime(environment)
+    : getProductRuntime();
 
   if (runtime) {
     const key = `${getProductEnvironmentPrefix(runtime)}_DATABASE_URL` as
       | "CALENDAR_SYNC_DATABASE_URL"
       | "TIME_CARD_MANAGER_DATABASE_URL";
-    const productUrl = environment[key];
+    const productUrl = resolvedEnvironment[key];
 
     if (!productUrl?.trim()) {
       throw new Error(`${key} is required for the ${runtime} runtime.`);
@@ -33,8 +36,8 @@ export function selectDatabaseUrl(
     return productUrl;
   }
 
-  return environment.TCM_QA_DATABASE_URL ??
-    environment.DATABASE_URL ??
-    environment.DATABASE_URL_UNPOOLED ??
+  return resolvedEnvironment.TCM_QA_DATABASE_URL ??
+    resolvedEnvironment.DATABASE_URL ??
+    resolvedEnvironment.DATABASE_URL_UNPOOLED ??
     localDatabaseUrl;
 }

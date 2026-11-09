@@ -21,9 +21,12 @@ export function getRuntimePluginId(runtime: ProductRuntimeId): SquareProductPlug
 export function getSquareProductEnvironmentValue(
   pluginId: SquareProductPluginId,
   name: string,
-  environment: SquareConfigurationEnvironment = process.env
+  environment?: SquareConfigurationEnvironment
 ) {
-  const runtime = getProductRuntime(environment);
+  const resolvedEnvironment = environment ?? process.env;
+  const runtime = environment
+    ? getProductRuntime(environment)
+    : getProductRuntime();
 
   if (runtime && pluginId !== getRuntimePluginId(runtime)) {
     throw new Error(`${runtime} runtime cannot access ${pluginId} Square configuration.`);
@@ -32,14 +35,14 @@ export function getSquareProductEnvironmentValue(
   const prefix = pluginId === "square-calendar-sink"
     ? "CALENDAR_SYNC"
     : "TIME_CARD_MANAGER";
-  const productValue = environment[`${prefix}_SQUARE_${name}`];
+  const productValue = resolvedEnvironment[`${prefix}_SQUARE_${name}`];
 
   if (productValue !== undefined) return productValue;
 
   // Only the legacy shared-root runtime may read Calendar Sync's historical
   // unprefixed settings while it is being retired.
   if (!runtime && pluginId === "square-calendar-sink") {
-    return environment[`SQUARE_${name}`] ?? "";
+    return resolvedEnvironment[`SQUARE_${name}`] ?? "";
   }
 
   return "";
@@ -47,12 +50,17 @@ export function getSquareProductEnvironmentValue(
 
 export function getSquareProductRedirectUri(
   pluginId: SquareProductPluginId,
-  environment: SquareConfigurationEnvironment = process.env
+  environment?: SquareConfigurationEnvironment
 ) {
-  const configured = getSquareProductEnvironmentValue(pluginId, "REDIRECT_URI", environment);
+  const configured = environment
+    ? getSquareProductEnvironmentValue(pluginId, "REDIRECT_URI", environment)
+    : getSquareProductEnvironmentValue(pluginId, "REDIRECT_URI");
   if (configured) return configured;
 
-  return !getProductRuntime(environment) && pluginId === "square-calendar-sink"
+  const runtime = environment
+    ? getProductRuntime(environment)
+    : getProductRuntime();
+  return !runtime && pluginId === "square-calendar-sink"
     ? "https://hosted-saas.vercel.app/api/integrations/square/callback"
     : "";
 }
