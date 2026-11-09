@@ -1,59 +1,119 @@
-const productionAppOrigin =
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000";
-const productionMarketingOrigin =
-  process.env.NEXT_PUBLIC_MARKETING_SITE_URL ?? "http://localhost:3000";
-const timeCardManagerQaOrigin = process.env.TCM_QA_APP_ORIGIN?.replace(/\/$/, "") ?? null;
-const previewOrigin = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : null;
-
-export function isPreviewDeployment() {
-  return process.env.VERCEL_ENV === "preview" && Boolean(previewOrigin);
+function getVercelPreviewOrigin(environment: NodeJS.ProcessEnv) {
+  const vercelUrl = environment.VERCEL_URL?.trim();
+  return vercelUrl ? `https://${vercelUrl}` : null;
 }
 
-export function getAppOrigin() {
-  if (timeCardManagerQaOrigin) {
-    return timeCardManagerQaOrigin;
+export function getAuthPreviewOrigin(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  if (environment.VERCEL_ENV !== "preview") {
+    return null;
   }
 
-  if (isPreviewDeployment() && previewOrigin) {
+  const configuredOrigin = environment.AUTH_PREVIEW_ORIGIN?.trim();
+
+  if (!configuredOrigin) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(configuredOrigin);
+
+    if (
+      parsed.protocol !== "https:" ||
+      parsed.username ||
+      parsed.password ||
+      parsed.pathname !== "/" ||
+      parsed.search ||
+      parsed.hash
+    ) {
+      return null;
+    }
+
+    return parsed.origin;
+  } catch {
+    return null;
+  }
+}
+
+export function isPreviewDeployment(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  return (
+    environment.VERCEL_ENV === "preview" &&
+    Boolean(
+      getVercelPreviewOrigin(environment) || getAuthPreviewOrigin(environment)
+    )
+  );
+}
+
+function getTimeCardManagerQaOrigin(environment: NodeJS.ProcessEnv) {
+  return environment.TCM_QA_APP_ORIGIN?.trim().replace(/\/$/, "") || null;
+}
+
+export function getAppOrigin(environment: NodeJS.ProcessEnv = process.env) {
+  const qaOrigin = getTimeCardManagerQaOrigin(environment);
+
+  if (qaOrigin) {
+    return qaOrigin;
+  }
+
+  const previewOrigin = getVercelPreviewOrigin(environment);
+
+  if (isPreviewDeployment(environment) && previewOrigin) {
     return previewOrigin;
   }
 
-  return productionAppOrigin;
+  return environment.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000";
 }
 
-export function getMarketingOrigin() {
-  if (timeCardManagerQaOrigin) {
-    return timeCardManagerQaOrigin;
+export function getMarketingOrigin(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  const qaOrigin = getTimeCardManagerQaOrigin(environment);
+
+  if (qaOrigin) {
+    return qaOrigin;
   }
 
-  if (isPreviewDeployment() && previewOrigin) {
+  const previewOrigin = getVercelPreviewOrigin(environment);
+
+  if (isPreviewDeployment(environment) && previewOrigin) {
     return previewOrigin;
   }
 
-  return productionMarketingOrigin;
+  return environment.NEXT_PUBLIC_MARKETING_SITE_URL ?? "http://localhost:3000";
 }
 
-export function getBetterAuthOrigin() {
-  if (process.env.BETTER_AUTH_URL && !isPreviewDeployment()) {
-    return process.env.BETTER_AUTH_URL;
+export function getBetterAuthOrigin(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  const authPreviewOrigin = getAuthPreviewOrigin(environment);
+
+  if (authPreviewOrigin) {
+    return authPreviewOrigin;
   }
 
-  return getAppOrigin();
+  if (environment.BETTER_AUTH_URL && !isPreviewDeployment(environment)) {
+    return environment.BETTER_AUTH_URL;
+  }
+
+  return getAppOrigin(environment);
 }
 
-export function getBetterAuthTrustedOrigins() {
-  const configuredOrigins = (
-    process.env.BETTER_AUTH_TRUSTED_ORIGINS ?? ""
-  )
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean);
-
-  return [...new Set([
-    getAppOrigin(),
-    getMarketingOrigin(),
-    ...configuredOrigins
-  ])];
+export function getBetterAuthTrustedOrigins(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  return Array.from(
+    new Set(
+      [
+        getAppOrigin(environment),
+        getMarketingOrigin(environment),
+        getAuthPreviewOrigin(environment),
+        ...(environment.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
+          .split(",")
+          .map((origin) => origin.trim())
+      ].filter((origin): origin is string => Boolean(origin))
+    )
+  );
 }
