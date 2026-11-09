@@ -12,7 +12,8 @@
     "test:missing-punch": "node --no-warnings --experimental-strip-types --test tests/time-card-missing-punch.test.mts",
     "test:auth": "node --no-warnings --experimental-strip-types --test tests/auth-recovery-flow.test.mts tests/auth-recovery.test.mts tests/customer-profile-initialization.test.mts tests/google-sign-in.test.mts",
     "test:auth-wrapper": "node --no-warnings --experimental-strip-types --test tests/current-customer-wrapper.test.mts",
-    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:auth && npm run test:auth-wrapper",
+    "test:auth-independence": "node --no-warnings --experimental-strip-types --test tests/auth-product-independence.test.mts",
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:auth && npm run test:auth-wrapper && npm run test:auth-independence",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
