@@ -16,7 +16,7 @@ type BillingSuccessPageProps = {
 export default async function BillingSuccessPage({ searchParams }: BillingSuccessPageProps) {
   const routing = await getPublicRouting();
   const redirectTo = routing.appHost ? "/subscriptions" : "/app/subscriptions";
-  const { customer } = await requireCurrentCustomer(redirectTo, redirectTo);
+  const { customer } = await requireCurrentCustomer(redirectTo);
   const params = await searchParams;
   const sessionId = String(params?.session_id ?? "").trim();
 

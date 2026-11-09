@@ -13,7 +13,7 @@ type AccountPageProps = {
 export default async function AccountPage({ searchParams }: AccountPageProps) {
   const routing = await getPublicRouting();
   const redirectTo = routing.appHost ? "/account" : "/app/account";
-  const { customer } = await requireCurrentCustomer(redirectTo, routing.dashboardPath);
+  const { customer } = await requireCurrentCustomer(redirectTo);
   const params = await searchParams;
 
   return (
