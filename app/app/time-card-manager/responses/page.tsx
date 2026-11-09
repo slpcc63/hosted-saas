@@ -67,7 +67,7 @@ export default async function ManagerResponsesPage({
     : "/app/time-card-manager/responses";
   const timeCardPath = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
   const subscriptionsPath = routing.appHost ? "/subscriptions" : "/app/subscriptions";
-  const { customer } = await requireCurrentCustomer(redirectTo, routing.dashboardPath);
+  const { customer } = await requireCurrentCustomer(redirectTo);
   const [employees, requests, auditEvents, confirmationRuns, confirmationSettings, subscription, query] = await Promise.all([
     getTimeCardEmployeeContacts(customer.id),
     getTimeCardConfirmationRequests(customer.id, 250),

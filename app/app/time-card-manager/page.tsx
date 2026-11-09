@@ -49,7 +49,7 @@ export default async function TimeCardManagerPage({
     ? "/time-card-manager/responses"
     : "/app/time-card-manager/responses";
   const squareConnectHref = `/api/integrations/square/connect?plugin=square-time-card-manager`;
-  const { customer } = await requireCurrentCustomer(redirectTo, "/app");
+  const { customer } = await requireCurrentCustomer(redirectTo);
   await ensureSeedCatalog();
   const [overview, squareStatus] = await Promise.all([
     getTimeCardManagerOverview(customer.id),

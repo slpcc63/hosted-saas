@@ -1,8 +1,10 @@
 import "server-only";
 
-import { redirect } from "next/navigation";
-
 import { requireSession } from "@/lib/auth/server";
+import {
+  getAuthenticatedCustomerProfileRow,
+  getOrCreateCustomerProfileRow
+} from "@/lib/customer-profile-initialization";
 import { db } from "@/lib/db";
 
 export type CustomerProfile = {
@@ -160,22 +162,24 @@ export async function setStripeCustomerId(customerId: string, stripeCustomerId: 
 }
 
 export async function getOrCreateCustomerProfile(input: UpsertCustomerProfileInput) {
-  const existing = await getCustomerByUserId(input.userId);
+  await ensureCustomerProfilesTable();
 
-  if (existing) {
-    return existing;
-  }
+  const row = await getOrCreateCustomerProfileRow(
+    (statement, values) => db.query(statement, values),
+    input
+  );
 
-  return upsertCustomerProfile(input);
+  return mapCustomerProfile(row);
 }
 
-export async function requireCurrentCustomer(nextPath: string, missingCustomerRedirect = "/") {
+export async function requireCurrentCustomer(nextPath: string) {
   const session = await requireSession(nextPath);
-  const customer = await getCustomerByUserId(session.user.id);
-
-  if (!customer) {
-    redirect(missingCustomerRedirect);
-  }
+  await ensureCustomerProfilesTable();
+  const row = await getAuthenticatedCustomerProfileRow(
+    (statement, values) => db.query(statement, values),
+    session.user
+  );
+  const customer = mapCustomerProfile(row);
 
   return {
     customer,

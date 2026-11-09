@@ -72,7 +72,7 @@ function deliveryLabel(feed: {
 export async function CalendarSinkManagerPage({ searchParams }: CalendarSinkManagerPageProps) {
   const routing = await getPublicRouting();
   const redirectTo = routing.appHost ? "/calendar-sink" : "/app/calendar-sink";
-  const { customer } = await requireCurrentCustomer(redirectTo, "/app");
+  const { customer } = await requireCurrentCustomer(redirectTo);
   const [overview, requestHeaders, params] = await Promise.all([
     getSquareCalendarSinkOverview(customer.id),
     headers(),

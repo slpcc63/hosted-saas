@@ -21,7 +21,7 @@ import {
 async function getCalendarSinkActionContext() {
   const routing = await getPublicRouting();
   const redirectTo = routing.appHost ? "/calendar-sink" : "/app/calendar-sink";
-  const { customer } = await requireCurrentCustomer(redirectTo, "/app");
+  const { customer } = await requireCurrentCustomer(redirectTo);
   const setupBaseUrl = `${getAppOrigin()}${routing.appHost ? "" : "/app"}/calendar-sink/subscribe`;
   return { customer, redirectTo, setupBaseUrl };
 }
