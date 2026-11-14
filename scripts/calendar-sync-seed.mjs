@@ -189,10 +189,11 @@ export async function verify(state, token, outputDirectory) {
   // Narrow CLI-only resolver: run the actual application Square reader without Next.js.
   const { registerHooks } = await import('node:module');
   const squareURL = pathToFileURL(await realpath(new URL('../lib/square.ts', import.meta.url))).href;
+  const libURL = new URL('../lib/', import.meta.url).href;
   const hook = registerHooks({ resolve(specifier, context, next) {
-    if (context.parentURL === squareURL && specifier === 'server-only') return { url: 'data:text/javascript,export{}', shortCircuit: true };
-    if (context.parentURL === squareURL && specifier === '@/lib/square-pagination') return { url: new URL('../lib/square-pagination.ts', import.meta.url).href, shortCircuit: true };
-    if (context.parentURL === squareURL && specifier === '@/lib/square-disconnect') return { url: new URL('../lib/square-disconnect.ts', import.meta.url).href, shortCircuit: true };
+    const fromLib = typeof context.parentURL === 'string' && context.parentURL.startsWith(libURL);
+    if (fromLib && specifier === 'server-only') return { url: 'data:text/javascript,export{}', shortCircuit: true };
+    if (fromLib && specifier.startsWith('@/lib/')) return { url: new URL(`../lib/${specifier.slice('@/lib/'.length)}.ts`, import.meta.url).href, shortCircuit: true };
     return next(specifier, context);
   } });
   process.env.SQUARE_ENVIRONMENT = 'sandbox';
