@@ -10,8 +10,10 @@
     "test:calendar-sync": "node --no-warnings --experimental-strip-types --test tests/calendar-sync.test.mts",
     "test:time-card": "node --no-warnings --experimental-strip-types --test tests/time-card-response-parser.test.mts",
     "test:missing-punch": "node --no-warnings --experimental-strip-types --test tests/time-card-missing-punch.test.mts",
-    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch",
-    "typecheck": "next typegen && tsc --noEmit"
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:calendar-seed",
+    "typecheck": "next typegen && tsc --noEmit",
+    "calendar:seed": "node --no-warnings --experimental-transform-types --env-file-if-exists=.env.calendar-sync.local scripts/calendar-sync-seed.mjs",
+    "test:calendar-seed": "node --no-warnings --experimental-transform-types --test tests/calendar-sync-seed.test.mjs"
   },
   "dependencies": {
     "@types/pg": "^8.20.0",
