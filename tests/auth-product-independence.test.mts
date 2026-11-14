@@ -50,10 +50,8 @@ test("shared authentication and customer identity do not depend on either Square
 });
 
 test("the auth-only candidate retains production origin and database selection", async () => {
-  const [{ source: deployment }, { source: database }] = await readSources([
-    "lib/deployment.ts",
-    "lib/db.ts"
-  ]);
+  const [{ source: deployment }, { source: database }, { source: databaseSelection }] =
+    await readSources(["lib/deployment.ts", "lib/db.ts", "lib/database-url.ts"]);
 
   assert.match(deployment, /NEXT_PUBLIC_APP_URL/);
   assert.match(deployment, /NEXT_PUBLIC_MARKETING_SITE_URL/);
@@ -65,8 +63,11 @@ test("the auth-only candidate retains production origin and database selection",
     /TCM_QA_|CALENDAR_SYNC_|TIME_CARD_MANAGER_/
   );
 
-  assert.match(database, /process\.env\.DATABASE_URL/);
-  assert.match(database, /process\.env\.DATABASE_URL_UNPOOLED/);
+  // Database selection moved from db.ts into database-url.ts during the
+  // runtime split; db.ts must stay free of product-specific variables.
+  assert.match(database, /selectDatabaseUrl/);
+  assert.match(databaseSelection, /DATABASE_URL\b/);
+  assert.match(databaseSelection, /DATABASE_URL_UNPOOLED/);
   assert.doesNotMatch(database, /TCM_QA_DATABASE_URL/);
 });
 
