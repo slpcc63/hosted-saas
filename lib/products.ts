@@ -42,6 +42,12 @@ export type MarketingProduct = {
   shortDescription: string | null;
   slug: string;
   title: string;
+  marketingLink?: {
+    external?: boolean;
+    href: string;
+    label: string;
+  };
+  marketingStatus?: string;
 };
 
 export type CreateProductInput = {
