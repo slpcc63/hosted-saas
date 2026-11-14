@@ -8,3 +8,4 @@ coverage
 *.log
 .vercel
 products/*/.build
+data/*.db
