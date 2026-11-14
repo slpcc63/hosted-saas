@@ -5,6 +5,8 @@ import { getAppOrigin } from "@/lib/deployment";
 export type StripeCheckoutSession = {
   customer: string | null;
   id: string;
+  payment_status: string | null;
+  status: string | null;
   subscription: string | null;
   url: string | null;
 };

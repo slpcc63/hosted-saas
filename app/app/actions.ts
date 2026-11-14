@@ -19,11 +19,6 @@ import {
   createStripeCustomer,
   isStripeConfigured
 } from "@/lib/stripe";
-import {
-  cancelSubscriptionForCustomer,
-  changeSubscriptionPlanForCustomer,
-  createSubscriptionForCustomer
-} from "@/lib/subscriptions";
 import { parseManagedSenderLocalPart } from "@/lib/email";
 import {
   addTimeCardManagerScheduleEntry,
@@ -149,6 +144,10 @@ export async function subscribeToPlanAction(formData: FormData) {
     redirect(`${redirectTo}?error=plan_required`);
   }
 
+  if (!isStripeConfigured()) {
+    redirect(`${redirectTo}?error=stripe_not_configured`);
+  }
+
   const customer = await getOrCreateCustomerProfile({
     userId: session.user.id,
     email: session.user.email,
@@ -157,54 +156,43 @@ export async function subscribeToPlanAction(formData: FormData) {
     status: "active"
   });
 
-  if (isStripeConfigured()) {
-    const plans = await getPublishedSubscriptionPlans();
-    const plan = plans.find((entry) => entry.planId === planId);
+  const plans = await getPublishedSubscriptionPlans();
+  const plan = plans.find((entry) => entry.planId === planId);
 
-    if (!plan?.stripePriceLookupKey) {
-      redirect(`${redirectTo}?error=stripe_plan_missing`);
-    }
-
-    let stripeCustomerId = customer.stripeCustomerId;
-
-    if (!stripeCustomerId) {
-      const stripeCustomer = await createStripeCustomer({
-        email: customer.email,
-        name: customer.contactName ?? customer.companyName
-      });
-
-      stripeCustomerId = stripeCustomer.id;
-      await setStripeCustomerId(customer.id, stripeCustomerId);
-    }
-
-    const successPath = `/billing/success?session_id={CHECKOUT_SESSION_ID}`;
-    const successUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000"}${successPath}`;
-    const cancelUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000"}${redirectTo}`;
-
-    const checkoutSession = await createStripeCheckoutSession({
-      cancelUrl,
-      customerId: stripeCustomerId,
-      localCustomerId: customer.id,
-      lookupKey: plan.stripePriceLookupKey,
-      planId,
-      successUrl
-    });
-
-    if (!checkoutSession.url) {
-      redirect(`${redirectTo}?error=stripe_checkout_failed`);
-    }
-
-    redirect(checkoutSession.url);
+  if (!plan?.stripePriceLookupKey) {
+    redirect(`${redirectTo}?error=stripe_plan_missing`);
   }
 
-  await createSubscriptionForCustomer({
-    customerId: customer.id,
-    planId
+  let stripeCustomerId = customer.stripeCustomerId;
+
+  if (!stripeCustomerId) {
+    const stripeCustomer = await createStripeCustomer({
+      email: customer.email,
+      name: customer.contactName ?? customer.companyName
+    });
+
+    stripeCustomerId = stripeCustomer.id;
+    await setStripeCustomerId(customer.id, stripeCustomerId);
+  }
+
+  const successPath = `/billing/success?session_id={CHECKOUT_SESSION_ID}`;
+  const successUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000"}${successPath}`;
+  const cancelUrl = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://app.localhost:3000"}${redirectTo}`;
+
+  const checkoutSession = await createStripeCheckoutSession({
+    cancelUrl,
+    customerId: stripeCustomerId,
+    localCustomerId: customer.id,
+    lookupKey: plan.stripePriceLookupKey,
+    planId,
+    successUrl
   });
 
-  revalidatePath("/app/subscriptions");
-  revalidatePath("/app/dashboard");
-  redirect(`${redirectTo}?saved=subscription`);
+  if (!checkoutSession.url) {
+    redirect(`${redirectTo}?error=stripe_checkout_failed`);
+  }
+
+  redirect(checkoutSession.url);
 }
 
 export async function openBillingPortalAction(formData: FormData) {
@@ -233,62 +221,6 @@ export async function openBillingPortalAction(formData: FormData) {
   });
 
   redirect(portalSession.url);
-}
-
-export async function changeSubscriptionPlanAction(formData: FormData) {
-  const redirectTo = String(formData.get("redirectTo") ?? "/subscriptions");
-  const session = await requireSession(redirectTo);
-  const subscriptionId = String(formData.get("subscriptionId") ?? "").trim();
-  const planId = String(formData.get("planId") ?? "").trim();
-
-  if (!subscriptionId || !planId) {
-    redirect(`${redirectTo}?error=plan_change_invalid`);
-  }
-
-  const customer = await getOrCreateCustomerProfile({
-    userId: session.user.id,
-    email: session.user.email,
-    companyName: session.user.name ?? session.user.email.split("@")[0] ?? "",
-    contactName: session.user.name ?? "",
-    status: "active"
-  });
-
-  await changeSubscriptionPlanForCustomer({
-    customerId: customer.id,
-    planId,
-    subscriptionId
-  });
-
-  revalidatePath("/app/subscriptions");
-  revalidatePath("/app/dashboard");
-  redirect(`${redirectTo}?saved=plan_changed`);
-}
-
-export async function cancelSubscriptionAction(formData: FormData) {
-  const redirectTo = String(formData.get("redirectTo") ?? "/subscriptions");
-  const session = await requireSession(redirectTo);
-  const subscriptionId = String(formData.get("subscriptionId") ?? "").trim();
-
-  if (!subscriptionId) {
-    redirect(`${redirectTo}?error=subscription_missing`);
-  }
-
-  const customer = await getOrCreateCustomerProfile({
-    userId: session.user.id,
-    email: session.user.email,
-    companyName: session.user.name ?? session.user.email.split("@")[0] ?? "",
-    contactName: session.user.name ?? "",
-    status: "active"
-  });
-
-  await cancelSubscriptionForCustomer({
-    customerId: customer.id,
-    subscriptionId
-  });
-
-  revalidatePath("/app/subscriptions");
-  revalidatePath("/app/dashboard");
-  redirect(`${redirectTo}?saved=canceled`);
 }
 
 export async function saveTimeCardManagerSettingsAction(formData: FormData) {

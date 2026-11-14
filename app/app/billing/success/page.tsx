@@ -29,8 +29,14 @@ export default async function BillingSuccessPage({ searchParams }: BillingSucces
   const checkoutSession = await getStripeCheckoutSession(sessionId);
   const planId = checkoutSession.metadata?.planId;
   const stripeSubscriptionId = checkoutSession.subscription;
+  const checkoutBelongsToCustomer =
+    Boolean(customer.stripeCustomerId) &&
+    checkoutSession.customer === customer.stripeCustomerId &&
+    checkoutSession.metadata?.customerId === customer.id;
+  const checkoutIsPaid =
+    checkoutSession.status === "complete" && checkoutSession.payment_status === "paid";
 
-  if (!planId || !stripeSubscriptionId) {
+  if (!planId || !stripeSubscriptionId || !checkoutBelongsToCustomer || !checkoutIsPaid) {
     redirect(`${redirectTo}?error=stripe_checkout_failed`);
   }
 
