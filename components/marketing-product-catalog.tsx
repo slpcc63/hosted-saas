@@ -61,6 +61,10 @@ function matchesPriceFilter(product: MarketingProduct, priceFilter: PriceFilter)
 }
 
 function formatPricing(product: MarketingProduct) {
+  if (product.pricingModel === "prototype") {
+    return "Interactive prototype";
+  }
+
   if (product.pricingModel === "custom_quote") {
     return "Custom quote";
   }
@@ -112,7 +116,7 @@ export function MarketingProductCatalog({
           <h1>Browse plugins, apps, and custom builds.</h1>
         </div>
         <p className="catalog-summary">
-          Only currently approved offerings are shown here.
+          Published offerings and explicitly labeled prototypes are shown here.
         </p>
       </div>
 
@@ -176,8 +180,24 @@ export function MarketingProductCatalog({
 
               <div className="product-meta">
                 <span>{product.platform ?? "Platform TBD"}</span>
-                <span>{product.planCount > 0 ? `${product.planCount} plans` : "Custom scope"}</span>
+                <span>
+                  {product.marketingStatus ??
+                    (product.planCount > 0 ? `${product.planCount} plans` : "Custom scope")}
+                </span>
               </div>
+
+              {product.marketingLink ? (
+                <div className="product-card-actions">
+                  <a
+                    className="pill primary"
+                    href={product.marketingLink.href}
+                    rel={product.marketingLink.external ? "noreferrer" : undefined}
+                    target={product.marketingLink.external ? "_blank" : undefined}
+                  >
+                    {product.marketingLink.label}
+                  </a>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

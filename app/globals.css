@@ -310,6 +310,16 @@ textarea {
   font-size: 0.92rem;
 }
 
+.product-card-actions {
+  display: flex;
+  align-items: center;
+}
+
+.product-card-actions .pill {
+  width: 100%;
+  text-align: center;
+}
+
 .catalog-empty {
   padding: 2rem;
   border: 1px solid var(--border);
