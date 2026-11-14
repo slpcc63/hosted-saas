@@ -23,7 +23,9 @@
     "build:calendar-sync:contract": "npm --prefix products/calendar-sync run build:contract",
     "build:time-card-manager:contract": "npm --prefix products/time-card-manager run build:contract",
     "build:product-contracts": "npm run build:calendar-sync:contract && npm run build:time-card-manager:contract",
-    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper && npm run test:product-boundaries && npm run test:product-runtime-isolation && npm run test:auth-independence && npm run test:auth-origin",
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper && npm run test:product-boundaries && npm run test:product-runtime-isolation && npm run test:auth-independence && npm run test:auth-origin && npm run test:calendar-seed",
+    "calendar:seed": "node --no-warnings --experimental-transform-types --env-file-if-exists=.env.calendar-sync.local scripts/calendar-sync-seed.mjs",
+    "test:calendar-seed": "node --no-warnings --experimental-transform-types --test tests/calendar-sync-seed.test.mjs",
     "typecheck": "next typegen && tsc --noEmit"
   },
   "dependencies": {
