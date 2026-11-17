@@ -1,0 +1,26 @@
+name: guardrails
+on:
+  pull_request:
+  push:
+    branches: [qa, main, "integration/**"]
+jobs:
+  guardrails:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Boundary rules (names)
+        run: node scripts/check-boundaries.mjs
+      - name: Import rules
+        run: npx depcruise --config .dependency-cruiser.cjs apps packages 2>&1 | tee /tmp/cruise.log; ! grep -q missing-tsc-transpiler /tmp/cruise.log
+      - name: Check-weakening scan
+        if: github.event_name == 'pull_request'
+        run: bash scripts/check-test-weakening.sh origin/${{ github.base_ref }}
+      - name: Typecheck and tests
+        run: npm run typecheck && npm test
+      - name: Isolation build (each extension alone)
+        run: |
+          for app in sentinel cadence closeout; do bash scripts/check-isolation.sh "$app"; done

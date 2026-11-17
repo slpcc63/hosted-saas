@@ -1,0 +1,57 @@
+{
+  "_comment": "Rules for scripts/check-boundaries.mjs. PROTECTED FILE. Exceptions go in 'allow' with a reason and an expiry date; they stay visible in every run and fail once expired.",
+  "extensions": [".ts", ".tsx", ".mts", ".js", ".mjs", ".cjs", ".jsx"],
+  "ignoreDirs": ["node_modules", ".next", ".build", "dist", ".git", "coverage"],
+  "rules": [
+    {
+      "id": "shared-packages-know-no-products",
+      "paths": ["packages/identity", "packages/billing", "packages/connector-kit", "packages/runtime-kit"],
+      "forbid": ["sentinel", "cadence", "closeout", "time[-_ ]?card", "calendar[-_ ]?(sync|sink)", "TCM_QA", "TIME_CARD_MANAGER_", "CALENDAR_SYNC_"],
+      "flags": "i",
+      "why": "Shared code must work for any extension. Product names or product env vars here mean a leak. Products register themselves; shared code never names them."
+    },
+    {
+      "id": "shared-packages-know-no-vendors",
+      "paths": ["packages/identity", "packages/billing", "packages/runtime-kit"],
+      "forbid": ["square"],
+      "flags": "i",
+      "why": "Vendor (Square) code lives only in packages/connector-square."
+    },
+    {
+      "id": "cores-know-no-vendors",
+      "paths": ["packages/sentinel-core", "packages/cadence-core", "packages/closeout-core"],
+      "forbid": ["square"],
+      "flags": "i",
+      "why": "Extension cores (data model + business logic) must not know which API supplies the data. They depend on interfaces from connector-kit."
+    },
+    {
+      "id": "sentinel-isolated",
+      "paths": ["packages/sentinel-core", "apps/sentinel"],
+      "forbid": ["cadence", "closeout"],
+      "flags": "i",
+      "why": "Extensions must not reference each other."
+    },
+    {
+      "id": "cadence-isolated",
+      "paths": ["packages/cadence-core", "apps/cadence"],
+      "forbid": ["sentinel", "closeout"],
+      "flags": "i",
+      "why": "Extensions must not reference each other."
+    },
+    {
+      "id": "closeout-isolated",
+      "paths": ["packages/closeout-core", "apps/closeout"],
+      "forbid": ["sentinel", "cadence"],
+      "flags": "i",
+      "why": "Extensions must not reference each other."
+    },
+    {
+      "id": "connector-knows-no-products",
+      "paths": ["packages/connector-square"],
+      "forbid": ["sentinel", "cadence", "closeout", "TCM_QA", "TIME_CARD_MANAGER_", "CALENDAR_SYNC_"],
+      "flags": "i",
+      "why": "A connector implements generic interfaces. It never knows which product is calling it."
+    }
+  ],
+  "allow": []
+}

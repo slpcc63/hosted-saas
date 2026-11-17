@@ -1,0 +1,10 @@
+# Changes to these files need the owner's approval (enable "Require review from Code Owners").
+# Replace @slpcc63 if the GitHub username differs.
+/extensions.json                 @slpcc63
+/guardrails.config.json          @slpcc63
+/.dependency-cruiser.cjs         @slpcc63
+/scripts/                        @slpcc63
+/.github/                        @slpcc63
+/AGENTS.md                       @slpcc63
+/PLAN.md                         @slpcc63
+/docs/                           @slpcc63
