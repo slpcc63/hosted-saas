@@ -82,3 +82,61 @@ Test count before → after: 99 → 99.
 
 ### 9. Next PLAN item
 1.2 — npm workspaces + move the app to `apps/web` (after Phase 0 owner items).
+
+## Report for owner-approved fix (not a PLAN item) — CI import check must fail on violations (Claude, 2026-11-16)
+
+### 1. What changed, in everyday words
+The automatic "Import rules" check could show green even when dependency-cruiser found a
+rule violation, because its result was lost when the output was copied to a log file. One
+line (`set -o pipefail`) makes the step fail whenever dependency-cruiser fails.
+
+### 2. Could a customer notice anything?
+No. Only the CI check file changed.
+
+### 3. Files
+- Moved: none
+- Edited: `.github/workflows/guardrails.yml` (one line added to the "Import rules" step)
+- Created: none
+- Deleted: none
+
+### 4. Protected files or tests touched?
+Yes. `.github/workflows/guardrails.yml`. The step now fails if dependency-cruiser fails.
+This makes the check stricter, not looser. OWNER APPROVAL: given in chat 2026-11-16
+(raised in the PLAN 1.1 report, §7). Not a PLAN.md step; done as its own PR at the owner's request.
+
+### 5. Command output
+Proof of the gap and the fix (depcruise pointed at a missing folder so it fails):
+```
+before (current CI line, bash -e):  step exit code: 0   <- CI would show green
+after  (with set -o pipefail):      step exit code: 1   <- CI shows red
+fixed step on the normal repo:      ✔ no dependency violations found (6 modules, 4 dependencies cruised)  [exit 0]
+```
+Required checks:
+```
+$ node scripts/check-boundaries.mjs
+PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages   (apps/ does not exist yet: SKIPPED)
+✔ no dependency violations found (6 modules, 4 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck
+[exit 0]
+$ npm test
+tests 99 / pass 99 / fail 0
+$ bash scripts/check-isolation.sh sentinel
+SKIPPED: apps/sentinel does not exist yet.
+```
+Test count before → after: 99 → 99.
+
+### 6. NOT VERIFIED
+- Isolation checks: no extension apps exist yet.
+- `next build` (needs a database, PLAN 1.3).
+
+### 7. Risks and surprises
+none
+
+### 8. Stop-and-ask items raised
+none new
+
+### 9. Next PLAN item
+0.2 — owner baseline QA click-through.
