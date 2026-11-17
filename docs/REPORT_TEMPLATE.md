@@ -19,7 +19,7 @@ If yes: which, what exactly, why, and the line "OWNER APPROVAL: pending".
 ## 5. Command output (paste the real output, trimmed only of repetition)
 ```
 node scripts/check-boundaries.mjs
-npx depcruise --config .dependency-cruiser.cjs apps packages
+npx depcruise --config .dependency-cruiser.cjs apps packages   (only the folders that exist; SKIPPED if neither does yet)
 bash scripts/check-test-weakening.sh origin/integration/v1
 npm run typecheck
 npm test            (include the totals: tests / pass / fail)

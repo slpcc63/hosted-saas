@@ -40,6 +40,7 @@
     "@types/node": "^22.13.10",
     "@types/react": "^19.0.10",
     "@types/react-dom": "^19.0.4",
+    "dependency-cruiser": "^18.8.0",
     "eslint": "^9.21.0",
     "eslint-config-next": "^15.2.0",
     "typescript": "^5.8.2"

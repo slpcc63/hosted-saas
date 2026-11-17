@@ -55,7 +55,7 @@ recommendation. Then stop.
 Run these and paste the **actual output** into the report (not a summary of it):
 ```
 node scripts/check-boundaries.mjs
-npx depcruise --config .dependency-cruiser.cjs apps packages
+npx depcruise --config .dependency-cruiser.cjs apps packages   # only the folders that exist; SKIPPED if neither does yet
 bash scripts/check-test-weakening.sh origin/integration/v1
 npm run typecheck
 npm test
