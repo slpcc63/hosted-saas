@@ -16,6 +16,7 @@ jobs:
         run: node scripts/check-boundaries.mjs
       - name: Import rules
         run: |
+          set -o pipefail
           d=""; for x in apps packages; do if [ -d "$x" ]; then d="$d $x"; fi; done
           if [ -z "$d" ]; then echo "SKIPPED: apps/ and packages/ do not exist yet"; exit 0; fi
           npx depcruise --config .dependency-cruiser.cjs $d 2>&1 | tee /tmp/cruise.log; ! grep -q missing-tsc-transpiler /tmp/cruise.log
