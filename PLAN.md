@@ -8,12 +8,12 @@ Rule: the `skipped … does not exist yet` lines from `check-boundaries.mjs` mus
 land. Final state: zero skipped, zero ALLOWED.
 
 ## Phase 0 — Owner setup (owner does these; no code)
-- [ ] 0.1 (M) Import the bundle and push `integration/v1` (see OWNER_GUIDE §1).
-- [ ] 0.2 (M) Deploy QA from `integration/v1`; click through signup → subscribe → dashboard → each extension page. Write down anything broken *before* refactoring so it is not blamed on the refactor.
-- [ ] 0.3 (M) Turn on branch protection for `integration/v1` (OWNER_GUIDE §2) and tag old branches.
+- [x] 0.1 (M) Import the bundle and push `integration/v1` (see OWNER_GUIDE §1). _Done 2026-11-16 (PR #2)._
+- [x] 0.2 (M) Deploy QA from `integration/v1`; click through signup → subscribe → dashboard → each extension page. Write down anything broken *before* refactoring so it is not blamed on the refactor. _Done 2026-11-16: QA = `qa.tcm.slpcc63.com` on `integration/v1` @ `16eaa04`; notes in PROGRESS.md._
+- [ ] 0.3 (M) Turn on branch protection for `integration/v1` (OWNER_GUIDE §2) and tag old branches. _Partly done 2026-11-16: ruleset on `integration/v1` (PR required, 0 approvals, `guardrails` required, no force-push/delete; Code Owners review off until agents use a separate GitHub account). Old branches not yet tagged._
 
 ## Phase 1 — Guardrails and skeleton (no product code changes)
-- [ ] 1.1 (M) Add the handoff files to the repo root, `npm i -D typescript@^5 dependency-cruiser`. Add `tsconfig.tsbuildinfo` to `.gitignore` and untrack it.
+- [x] 1.1 (M) Add the handoff files to the repo root, `npm i -D typescript@^5 dependency-cruiser`. Add `tsconfig.tsbuildinfo` to `.gitignore` and untrack it. _Done 2026-11-16 (PR #2)._
   Proof: all §6 commands run; boundary check passes (most rules "skipped" is expected).
 - [ ] 1.2 (M) Convert to npm workspaces and move the existing Next app to `apps/web` with `git mv` (history kept). No code edits except paths/config.
   Proof: `npm test` count equals the baseline in PROGRESS.md (99 tests across the 9 scripts); app boots locally.

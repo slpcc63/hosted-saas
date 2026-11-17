@@ -140,3 +140,34 @@ none new
 
 ### 9. Next PLAN item
 0.2 — owner baseline QA click-through.
+
+## Owner baseline click-through — PLAN 0.2 (owner, recorded by Claude, 2026-11-16)
+
+### QA setup used
+- QA address: `https://qa.tcm.slpcc63.com`, a Vercel **Preview** deployment of branch `integration/v1`.
+- Deployment `dpl_BF5UWXaswru6jK6KqNaZjPRwKqWV`, built from commit `16eaa04` ("Merge pull request #3").
+- Owner moved QA from branch `codex/tcm-independent-square` to `integration/v1` in Vercel (domain plus
+  15 branch-only variables: `TCM_QA_*`, `TIME_CARD_MANAGER_SQUARE_*`, `CALENDAR_SYNC_SQUARE_*`,
+  `GOOGLE_CLIENT_*`). Claude verified: all 15 on `integration/v1`, none left on the old branch, the four
+  re-created `TIME_CARD_MANAGER_SQUARE_*` values identical to the originals. `codex/tcm-independent-square`
+  is fully contained in `integration/v1`, so no code was lost from QA.
+- Undo: point the domain and the 15 variables back at `codex/tcm-independent-square`.
+
+### Results (owner's words, lightly edited)
+- Overall: no regressions found. "There's a lot left to get working, but it was stuff that wasn't set up yet."
+- **Broken, predates the restructuring:** Cadence → Connect Square shows a blank page.
+  - Cause (verified by Claude): QA's `CALENDAR_SYNC_SQUARE_APPLICATION_ID` is `sandbox-sq0idb-hjBW…`, a Square
+    sandbox app the owner does not have in the Square Developer Console. Square returns HTTP 400
+    ("…first launch the seller test account from the Developer Console").
+  - The app builds the link correctly (`lib/square.ts` `getSquareAuthorizationUrl`), and the return address
+    `https://qa.tcm.slpcc63.com/api/integrations/square/callback` is set. Not a code problem.
+  - Likely fix (owner, not done yet): use the sandbox credentials of the Cadence app whose production ID starts
+    `sq0idp-eufH…` (the one the live site uses), set its sandbox redirect URL to the QA callback, update
+    `CALENDAR_SYNC_SQUARE_APPLICATION_ID` / `_SECRET` (Preview, `integration/v1`) and redeploy.
+
+### Notes for later
+- Preview deployments share the real Resend and Twilio keys with production. Email can really send from QA;
+  texting is off unless `TIME_CARD_TEXTING_LIVE` is set (it is not set for Preview). Use owner-controlled
+  addresses when testing.
+- The list of features "not set up yet" was not itemized. If something on that list is later found broken,
+  check here first before blaming the refactor.
