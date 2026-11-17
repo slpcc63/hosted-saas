@@ -1,0 +1,11 @@
+{
+  "_comment": "Single source of truth for which apps/cores exist. scripts/check-isolation.sh reads this. PROTECTED FILE: do not edit without owner approval.",
+  "apps": {
+    "sentinel": { "dir": "apps/sentinel", "core": "packages/sentinel-core" },
+    "cadence":  { "dir": "apps/cadence",  "core": "packages/cadence-core" },
+    "closeout": { "dir": "apps/closeout", "core": "packages/closeout-core" }
+  },
+  "hub": "apps/web",
+  "shared": ["packages/identity", "packages/billing", "packages/connector-kit", "packages/runtime-kit"],
+  "connectors": ["packages/connector-square"]
+}

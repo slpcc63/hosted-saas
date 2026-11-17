@@ -9,3 +9,6 @@ coverage
 .vercel
 products/*/.build
 data/*.db
+
+# TypeScript incremental build cache
+*.tsbuildinfo
