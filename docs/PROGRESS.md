@@ -171,3 +171,94 @@ none new
   addresses when testing.
 - The list of features "not set up yet" was not itemized. If something on that list is later found broken,
   check here first before blaming the refactor.
+
+
+# Lens account sync integration — November 19, 2026
+
+## 1. What changed, in everyday words
+Lens can use the existing Doxle account session to upload or download its own site settings. It does not create another login system or copy website passwords/sessions. This is an isolated review candidate on codex/lens-account-sync from integration/v1; it is not deployed or merged. Shannon authorized this Lens integration and continuation in the Lens source chat.
+
+## 2. Could a customer notice anything?
+No change to the current deployment. After separately accepted integration, Lens would have an authenticated settings portal. No billing, emails, texts, Square behavior or existing auth configuration changed.
+
+## 3. Files
+- Created app/api/lens/{route.ts,schema.mjs,schema.d.mts,portal.mjs,portal.d.mts}, tests/lens-sync.test.mjs, products/lens/migrations/001_lens_settings.sql.
+- Edited package.json only to append the new test to the existing suite.
+- Moved/deleted: none.
+
+## 4. Protected files or tests touched?
+No protected file edited. Existing assertions unchanged. New tests added; existing npm test chain preserved and extended. docs/PROGRESS.md appended as allowed.
+
+## 5. Command output
+
+```
+node scripts/check-boundaries.mjs
+Boundary check: 0 files scanned, 7 rules.
+  skipped  shared-packages-know-no-products: packages/identity (does not exist yet)
+  skipped  shared-packages-know-no-products: packages/billing (does not exist yet)
+  skipped  shared-packages-know-no-products: packages/connector-kit (does not exist yet)
+  skipped  shared-packages-know-no-products: packages/runtime-kit (does not exist yet)
+  skipped  shared-packages-know-no-vendors: packages/identity (does not exist yet)
+  skipped  shared-packages-know-no-vendors: packages/billing (does not exist yet)
+  skipped  shared-packages-know-no-vendors: packages/runtime-kit (does not exist yet)
+  skipped  cores-know-no-vendors: packages/sentinel-core (does not exist yet)
+  skipped  cores-know-no-vendors: packages/cadence-core (does not exist yet)
+  skipped  cores-know-no-vendors: packages/closeout-core (does not exist yet)
+  skipped  sentinel-isolated: packages/sentinel-core (does not exist yet)
+  skipped  sentinel-isolated: apps/sentinel (does not exist yet)
+  skipped  cadence-isolated: packages/cadence-core (does not exist yet)
+  skipped  cadence-isolated: apps/cadence (does not exist yet)
+  skipped  closeout-isolated: packages/closeout-core (does not exist yet)
+  skipped  closeout-isolated: apps/closeout (does not exist yet)
+  skipped  connector-knows-no-products: packages/connector-square (does not exist yet)
+PASS
+```
+
+```
+depcruise --config .dependency-cruiser.cjs packages
+
+✔ no dependency violations found (6 modules, 4 dependencies cruised)
+
+```
+
+```
+bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+```
+
+```
+npm run typecheck
+
+> hosted-saas@0.1.0 typecheck
+> next typegen && tsc --noEmit
+
+ ⚠ Attempted to load /Users/shannonphillips/Projects/slpcc63.com/hosted-saas/node_modules/next/next-swc-fallback/@next/swc-darwin-arm64/next-swc.darwin-arm64.node, but it was not installed
+ ⚠ Attempted to load @next/swc-darwin-arm64, but it was not installed
+Generating route types...
+✓ Route types generated successfully
+```
+
+```
+bash scripts/check-isolation.sh sentinel
+SKIPPED: apps/sentinel does not exist yet.
+```
+
+Existing npm test: 99 tests passed, zero failures (11 scripts). New Lens tests: 5 passed. Full combined rerun result appended below when verified.
+
+## 6. NOT VERIFIED
+Full Next build and deployed/real-account/two-device acceptance remain pending. Sentinel isolation is SKIPPED because apps/sentinel does not exist at this baseline. No Google-in-WebKit compatibility claim. The native sync URL remains disabled.
+
+## 7. Risks and surprises
+The native beta uses a dedicated first-party WebKit account store; Google may require a system-browser handoff. Product data must use LENS_DATABASE_URL and must never fall back to shared auth/Cadence/Sentinel data. No new dependencies. A separate empty lens_preview database and read/write non-admin runtime role were created only in the existing controlled-preview project. Automatic approval review rejected CREATE TABLE lens_settings there; no table/migration/configured connection was installed. Specific owner approval was requested in the source chat and is pending. No bypass attempted.
+
+## 8. Stop-and-ask items
+Owner-authorized new Lens integration is outside the restructuring PLAN; no unrelated PLAN item was advanced. Public release remains pending. Preview table approval and Apple sign-in renewal are pending in the source chat. No production migration or deployment authorized/executed by this report.
+
+## 9. Next PLAN item
+Existing restructuring PLAN unchanged. Lens next: table approval, controlled preview config/review/deployment, real account sign-in/provider and two-device checks.
+
+report_back_to: Sniffies / Lens distribution and iPhone app chat
+report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
+report_back_instructions: Return integration review/deployment, native build, real-account/provider/two-device evidence or blocker to the source chat. No secrets/private site lists.
+
+Lens integration final local check: combined existing/new suite completed with 104 passing tests (99 existing + 5 Lens), zero failures. npm run typecheck completed with exit 0; Next route type generation succeeded. The native archive 0.1.0 (2), including share extension, succeeded and Xcode reported internal TestFlight upload completed with only the existing iOS SDK future-deadline warning. Apple browser session expired before processing/group assignment verification; sign-in renewal is pending in the source chat. No public release.
