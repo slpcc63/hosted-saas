@@ -427,3 +427,67 @@ Combined npm test totals: 107 tests / 107 pass / 0 fail. Last script actual outp
 report_back_to: Sniffies / Lens distribution and iPhone app chat
 report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
 report_back_instructions: Return exact deployed preview and live sign-in/sync evidence or blocker here.
+
+
+## Lens preview deployment and live verification result — November 19, 2026
+
+
+State: preview server deployed and automated account/sync checks passed. Physical-device app acceptance pending. Public release remains pending owner approval.
+
+Exact tested source: slpcc63/hosted-saas codex/lens-account-sync commit e12f2d5bb1ce54e763869675ef0546d75e4d3af7.
+Deployment: dpl_6nWCebXpjxDihC65DFsmKinxHf8D, READY, preview, Next.js 15.5.14.
+Account entry: https://hosted-saas-b3im5yh15-slpcc63-8889s-projects.vercel.app/api/lens
+This preview retains Vercel deployment protection. It is not a public-release link. The root catalog route is outside this Lens test; use /api/lens.
+
+Story tested: render existing shared sign-in form -> create synthetic account in controlled preview -> sign in from two separate HTTP session jars -> upload saved-site settings -> retrieve and edit them from the other session -> retrieve the edit on the first session. No owner credentials, real dating-site data, password reset, email, SMS, billing or Square actions were used.
+
+Results: 107 local tests pass, typecheck and repository checks pass with baseline absent-directory skips. Remote Next build succeeds. Live verification below has 29 passing checks, zero failing checks. Synthetic preview accounts/settings remain as QA evidence; sessions were signed out. No real accounts or records were deleted/reset. No credentials, cookies or token values are included in this report.
+
+```text
+PASS: anonymous settings rejected
+PASS: anonymous portal redirects to local sign-in
+PASS: sign-in form renders
+PASS: synthetic account created in preview
+PASS: first independent session authenticated
+PASS: new account starts with empty Lens settings
+PASS: second client signs in to same account
+PASS: second independent session authenticated
+PASS: separate sessions share account identity
+PASS: client A saves settings
+PASS: client B downloads client A settings
+PASS: complete settings round trip matches
+PASS: client B updates same saved-site identity
+PASS: outdated client A save is rejected
+PASS: client A retrieves client B edit
+PASS: newer copy and stable identity preserved
+PASS: cross-origin write rejected
+PASS: account mismatch write rejected
+PASS: password data is not accepted
+PASS: signed-in portal and security headers render
+PASS: separate synthetic account created
+PASS: separate account reads own settings
+PASS: account isolation holds
+PASS: separate account cannot overwrite first account
+PASS: client A signs out
+PASS: signed-out client loses access
+PASS: client B session remains valid
+PASS: client B signs out
+PASS: isolation account signs out
+RESULT: 29 checks passed; two independent HTTP clients, not physical-device acceptance.
+```
+
+Limits: two independent HTTP clients, not two physical iOS devices. The sign-in HTML and portal responses were checked, not a browser-driven form interaction. Google OAuth was not configured/tested on this isolated preview. Native WebKit bridge transfer, real-device iPhone/iPad sign-in and device setting replacement remain pending a preview-enabled app build. TestFlight 0.1.0 (2) is unchanged and has account sync disabled. Do not describe live native sync as shipped.
+
+Deployment fixes: Git-backed deployment binds exact branch-scoped encrypted credentials. Controlled-preview-only Next connection() defers existing homepage catalog DDL until request time so the non-admin account role does not require schema creation. No permissions expanded, tests weakened or dependencies added. Existing root catalog runtime DDL remains outside this narrow fix; do not use it as a Lens acceptance claim.
+
+Isolation: controlled-preview project polished-river-37255905, account database neondb via lens_preview_identity_app (read/write public, not neon_superuser); Lens settings database lens_preview via lens_preview_app. Both credentials and non-secret guard config limited to codex/lens-account-sync in existing hosted-saas. No inherited credentials extracted. No production database migration, production environment change, alias promotion, merge, public release or plan purchase performed.
+
+Production readback after tests: app.slpcc63.com remains READY production deployment dpl_jykTNKVv4eruFMxcHMET3c3K9taz, release/time-card-email-v0.1@1998042a3faf8bfac50627820b4845a306989b62.
+
+TestFlight currently available: Lens | Doxle 0.1.0 (2), internal Owner Testing. Includes editing saved site name/URL while preserving identity, optional preferred account-name reminder (not an Apple Passwords default selector), purple Sites return and website history swipe fix, removed separate password form, and Add to Lens share extension. Versioned QA request remains LENS-BUILD-2-QA.md revision 1. No new beta uploaded for this server verification.
+
+Roadmap: local implementation/tests complete; isolated preview deployment complete; email/password sign-in and server round-trip verification complete; native preview build and physical-device acceptance pending; public release pending owner approval. Existing Compass metadata/production-guide migration gap remains.
+
+report_back_to: Sniffies / Lens distribution and iPhone app chat
+report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
+report_back_instructions: Return native build identity and device sign-in/transfer results or blocker here, preserving this server test snapshot. Do not send passwords, session cookies or private profiles. No public release without owner approval.
