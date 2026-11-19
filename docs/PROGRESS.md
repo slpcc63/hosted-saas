@@ -262,3 +262,67 @@ report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
 report_back_instructions: Return integration review/deployment, native build, real-account/provider/two-device evidence or blocker to the source chat. No secrets/private site lists.
 
 Lens integration final local check: combined existing/new suite completed with 104 passing tests (99 existing + 5 Lens), zero failures. npm run typecheck completed with exit 0; Next route type generation succeeded. The native archive 0.1.0 (2), including share extension, succeeded and Xcode reported internal TestFlight upload completed with only the existing iOS SDK future-deadline warning. Apple browser session expired before processing/group assignment verification; sign-in renewal is pending in the source chat. No public release.
+
+
+# Lens controlled preview deployment preparation — November 19, 2026
+
+1. Owner authorized isolated preview deployment and sign-in/two-client sync testing; production and public release remain excluded. Added explicit preview-mode database selection using the connection already stored on Vercel, with expected host/database validation and no inherited database fallback. No inherited credentials were extracted or persisted.
+
+2. No production customer changes. Preview account data uses controlled-preview neondb; Lens settings use the separately approved lens_preview.
+
+3. Edited lib/database-url.ts and package.json; added tests/controlled-preview-database.test.mts. No moved/deleted files or dependencies.
+
+4. No protected files or existing test assertions changed. New tests appended to the existing test chain.
+
+5. Actual local verification output, repetition trimmed:
+```
+Boundary check: 0 files scanned, 7 rules.
+PASS
+✔ no dependency violations found (6 modules, 4 dependencies cruised)
+PASS: no check-weakening patterns added.
+SKIPPED: apps/sentinel does not exist yet.
+```
+
+Typecheck output:
+```
+
+> hosted-saas@0.1.0 typecheck
+> next typegen && tsc --noEmit
+
+ ⚠ Attempted to load /Users/shannonphillips/Projects/slpcc63.com/hosted-saas/node_modules/next/next-swc-fallback/@next/swc-darwin-arm64/next-swc.darwin-arm64.node, but it was not installed
+ ⚠ Attempted to load @next/swc-darwin-arm64, but it was not installed
+Generating route types...
+✓ Route types generated successfully
+
+```
+
+Combined npm test counts: 107 tests / 107 pass / 0 fail (104 previous + 3 new). Actual final script output:
+```
+> hosted-saas@0.1.0 test:controlled-preview
+> node --no-warnings --experimental-strip-types --test tests/controlled-preview-database.test.mts
+
+✔ controlled preview uses only the verified existing preview connection (0.610333ms)
+✔ controlled preview cannot fall back to inherited databases (0.18625ms)
+✔ ordinary production database selection is unchanged (0.0585ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 87.732708
+
+```
+
+6. Full remote build, sign-in, and two-client sync pending; no native sync endpoint enabled. Isolation check skipped as baseline app directory is absent.
+
+7. Inherited database destinations were not independently established. Automatic approval review rejected extracting/decrypting inherited credentials; no extraction occurred. Safer alternative uses the credential only within its existing Vercel host and validates the destination against read-only Neon endpoint metadata before any connection. Existing controlled preview has shared auth tables. No new identity service or production schema change.
+
+8. No owner action currently required for this safe alternative. Existing public release approval gate remains.
+
+9. Next: exact-branch preview deployment, then real session sign-in and cross-client round trip. Existing unrelated restructuring PLAN unchanged.
+
+report_back_to: Sniffies / Lens distribution and iPhone app chat
+report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
+report_back_instructions: Return preview URL/build, sign-in and cross-client evidence or blockers here; keep production/public release unchanged.
