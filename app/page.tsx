@@ -24,6 +24,9 @@ const closingChecklistPrototype: MarketingProduct = {
 };
 
 export default async function HomePage() {
+  // The controlled account preview must not run catalog DDL during its build.
+  // Other environments retain their existing rendering behavior.
+  if (process.env.SLPCC63_CONTROLLED_PREVIEW === "1") await connection();
   await ensureSeedCatalog();
   const products = await getPublishedMarketingProducts();
   const assistedDemoProducts = products.map((product) =>
@@ -48,3 +51,5 @@ export default async function HomePage() {
     </>
   );
 }
+import { connection } from "next/server";
+

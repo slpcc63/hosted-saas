@@ -326,3 +326,104 @@ Combined npm test counts: 107 tests / 107 pass / 0 fail (104 previous + 3 new). 
 report_back_to: Sniffies / Lens distribution and iPhone app chat
 report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
 report_back_instructions: Return preview URL/build, sign-in and cross-client evidence or blockers here; keep production/public release unchanged.
+
+
+# Lens Git-backed preview build fix — November 19, 2026
+
+1. Owner approved continued isolated preview testing. Branch-specific encrypted account/settings credentials and non-secret destination guard settings are configured. Git deployment dpl_4z2S5D5g8HAUrpBCrvZRZJ8v5xdG correctly bound codex/lens-account-sync@2f98e73 and passed the destination guard, but homepage prerender failed on existing catalog DDL with permission denied for schema public. Added Next connection() only for SLPCC63_CONTROLLED_PREVIEW=1 to defer that homepage work until request time. No database permissions expanded.
+
+2. Production rendering path and deployed production unchanged; preview account/sync endpoints remain isolated. Root catalog page runtime DDL is an existing limitation, not fixed by this narrow preview-build change.
+
+3. Edited app/page.tsx; no moved/deleted files or dependencies.
+
+4. No protected files or test assertions edited.
+
+5. Actual verification output (repetition trimmed):
+
+typecheck
+```
+
+> hosted-saas@0.1.0 typecheck
+> next typegen && tsc --noEmit
+
+ ⚠ Attempted to load /Users/shannonphillips/Projects/slpcc63.com/hosted-saas/node_modules/next/next-swc-fallback/@next/swc-darwin-arm64/next-swc.darwin-arm64.node, but it was not installed
+ ⚠ Attempted to load @next/swc-darwin-arm64, but it was not installed
+Generating route types...
+✓ Route types generated successfully
+
+```
+
+boundaries
+```
+Boundary check: 0 files scanned, 7 rules.
+  skipped  shared-packages-know-no-products: packages/identity (does not exist yet)
+  skipped  shared-packages-know-no-products: packages/billing (does not exist yet)
+  skipped  shared-packages-know-no-products: packages/connector-kit (does not exist yet)
+  skipped  shared-packages-know-no-products: packages/runtime-kit (does not exist yet)
+  skipped  shared-packages-know-no-vendors: packages/identity (does not exist yet)
+  skipped  shared-packages-know-no-vendors: packages/billing (does not exist yet)
+  skipped  shared-packages-know-no-vendors: packages/runtime-kit (does not exist yet)
+  skipped  cores-know-no-vendors: packages/sentinel-core (does not exist yet)
+  skipped  cores-know-no-vendors: packages/cadence-core (does not exist yet)
+  skipped  cores-know-no-vendors: packages/closeout-core (does not exist yet)
+  skipped  sentinel-isolated: packages/sentinel-core (does not exist yet)
+  skipped  sentinel-isolated: apps/sentinel (does not exist yet)
+  skipped  cadence-isolated: packages/cadence-core (does not exist yet)
+  skipped  cadence-isolated: apps/cadence (does not exist yet)
+  skipped  closeout-isolated: packages/closeout-core (does not exist yet)
+  skipped  closeout-isolated: apps/closeout (does not exist yet)
+  skipped  connector-knows-no-products: packages/connector-square (does not exist yet)
+PASS
+
+```
+
+imports
+```
+
+✔ no dependency violations found (6 modules, 4 dependencies cruised)
+
+
+```
+
+weakening
+```
+PASS: no check-weakening patterns added.
+
+```
+
+isolation
+```
+SKIPPED: apps/sentinel does not exist yet.
+
+```
+
+Combined npm test totals: 107 tests / 107 pass / 0 fail. Last script actual output:
+```
+> hosted-saas@0.1.0 test:controlled-preview
+> node --no-warnings --experimental-strip-types --test tests/controlled-preview-database.test.mts
+
+✔ controlled preview uses only the verified existing preview connection (1.008458ms)
+✔ controlled preview cannot fall back to inherited databases (0.434417ms)
+✔ ordinary production database selection is unchanged (0.097959ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 125.922083
+
+```
+
+6. Rebuilt preview, live sign-in, two-client transfer and physical acceptance pending.
+
+7. No inherited credentials extracted. No production database/schema/alias change. Non-admin account preview role explicitly approved and verified not neon_superuser.
+
+8. No new owner action needed within approved continuation. Public release remains pending.
+
+9. Next: protected Git-backed rebuild, real authentication and two-client round trip. Existing unrelated PLAN unchanged.
+
+report_back_to: Sniffies / Lens distribution and iPhone app chat
+report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
+report_back_instructions: Return exact deployed preview and live sign-in/sync evidence or blocker here.
