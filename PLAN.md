@@ -15,10 +15,10 @@ land. Final state: zero skipped, zero ALLOWED.
 ## Phase 1 — Guardrails and skeleton (no product code changes)
 - [x] 1.1 (M) Add the handoff files to the repo root, `npm i -D typescript@^5 dependency-cruiser`. Add `tsconfig.tsbuildinfo` to `.gitignore` and untrack it. _Done 2026-11-16 (PR #2)._
   Proof: all §6 commands run; boundary check passes (most rules "skipped" is expected).
-- [ ] 1.2 (M) Convert to npm workspaces and move the existing Next app to `apps/web` with `git mv` (history kept). No code edits except paths/config.
+- [ ] 1.2 (M) Convert to npm workspaces and move the existing Next app to `apps/web` with `git mv` (history kept). No code edits except paths/config. _Owner decision 2026-11-22: deferred. The Vercel Root Directory is project-wide and the same project serves slpcc63.com and app.slpcc63.com, so the move waits until deploys are split. Packages are extracted with the app still at the repo root._
   Proof: `npm test` count equals the baseline in PROGRESS.md (99 tests across the 9 scripts); app boots locally.
-- [ ] 1.3 (D) Make the homepage not write to the database at render time (read-only catalog, or request-time render). Behavior-preserving.
-  Proof: `next build` succeeds with **no** database configured.
+- [x] 1.3 (D) Make the homepage not write to the database at render time (read-only catalog, or request-time render). Behavior-preserving.
+  Proof: `next build` succeeds with **no** database configured. _Done 2026-11-22 (branch `step/1.3-static-homepage-catalog`); owner chose a code-defined catalog._
 
 ## Phase 2 — Shared packages (each one: copy-free move, then delete duplicates)
 - [ ] 2.1 (M) `packages/identity`: auth, customers, customer-profile, shared-identity. Update imports in `apps/web`.

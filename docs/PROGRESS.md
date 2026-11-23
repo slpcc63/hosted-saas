@@ -171,3 +171,69 @@ none new
   addresses when testing.
 - The list of features "not set up yet" was not itemized. If something on that list is later found broken,
   check here first before blaming the refactor.
+
+## PLAN 1.3 — Homepage no longer touches the database (Claude, 2026-11-22)
+
+### 1. In plain language
+The public homepage used to write the product catalog into the database every time it was built or
+visited, so the site could not even be built without a database. It now lists products from a file in
+the code (`lib/catalog-data.ts`). The app pages (dashboard, subscriptions, admin) still write the same
+catalog to the database as before.
+
+### 2. Could a customer notice?
+No change expected: the homepage shows the same products, prices and order as the database query did,
+because the database rows came from this same seed data (it was rewritten on every visit).
+One difference by design (owner decision 2026-11-22): a product added only through the admin products
+screen will not appear on the homepage until it is added to `lib/catalog-data.ts`.
+
+### 3. What changed
+- `lib/catalog-data.ts` (new): the seed catalog data, moved unchanged from `lib/seed.ts`, plus
+  `getPublishedSeedMarketingProducts()`, which repeats the database query's filtering and ordering.
+- `lib/seed.ts`: imports that data instead of defining it. Database writes unchanged.
+- `app/page.tsx`: uses the code catalog; no `ensureSeedCatalog()` / database query.
+- `tests/homepage-static-catalog.test.mts` (new, 3 tests) and its `package.json` script.
+No dependencies added. No protected files edited except PLAN.md notes/tick.
+
+### 4. Owner decisions recorded
+- 1.2 deferred (see PLAN.md note): Vercel Root Directory is project-wide.
+- 1.3: code-defined public catalog (option a), not per-visit or cached database reads.
+
+### 5. Required checks
+```
+$ node scripts/check-boundaries.mjs
+PASS   (all rules skipped: apps/ and packages/* do not exist yet)
+$ npx depcruise --config .dependency-cruiser.cjs packages   (apps/ does not exist yet: SKIPPED)
+✔ no dependency violations found (6 modules, 4 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck
+✓ Route types generated successfully   [exit 0]
+$ npm test
+tests 102 / pass 102 / fail 0
+$ DATABASE_URL unset; npx next build
+exit 0   (before this change: "Error occurred prerendering page "/" … ECONNREFUSED 127.0.0.1:5432")
+$ bash scripts/check-isolation.sh sentinel
+SKIPPED: apps/sentinel does not exist yet.
+```
+Test count before → after: 99 → 102.
+
+### 6. NOT VERIFIED
+- The homepage on QA after deploy: compare it with the current QA homepage (same products, prices, order).
+- Whether the production database holds products added through the admin screen that the old homepage
+  showed. Claude has no database access. Check the admin products page on QA/production.
+- The homepage still renders per request (`ƒ /`) because the header reads the sign-in session. It no
+  longer writes to the database; making it fully static is not part of this step.
+
+### 7. Risks and surprises
+- The homepage on `integration/v1` uses the old names and shows Time Card Manager from $79/month. The live
+  slpcc63.com is a separate static build from `release/main-site-oct25` (Sentinel/Cadence/Handoff naming,
+  no prices). The two drift until the catalog step in Stage 3. Not changed here.
+- `build:public` (the static apex build) exists only on `release/main-site-oct25`.
+- Owner note 2026-11-22, target domains: www.slpcc63.com = marketing pages; app.slpcc63.com = sign-in,
+  then dashboard. Current state: the apex holds the static release, www is on an older deployment.
+
+### 8. Stop-and-ask items raised
+- None new.
+
+### 9. Next PLAN item
+2.1 — `packages/identity` (then 2.2 review).
