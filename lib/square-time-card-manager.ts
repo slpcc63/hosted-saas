@@ -27,7 +27,7 @@ import {
 import {
   ActiveProductSubscription,
   getActiveSubscriptionForProduct
-} from "@/lib/subscriptions";
+} from "@/packages/billing/subscriptions";
 
 const pluginId: SquarePluginId = "square-time-card-manager";
 const timeCardManagerProductSlug = "square-time-card-manager";

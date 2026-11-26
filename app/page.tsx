@@ -1,7 +1,7 @@
 import { SiteHeader } from "@/components/site-header";
 import { MarketingProductCatalog } from "@/components/marketing-product-catalog";
 import { getPublishedSeedMarketingProducts } from "@/lib/catalog-data";
-import type { MarketingProduct } from "@/lib/products";
+import type { MarketingProduct } from "@/packages/billing/products";
 
 const closingChecklistPrototype: MarketingProduct = {
   category: "square_plugin",

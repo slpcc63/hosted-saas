@@ -19,7 +19,7 @@ import {
   type MissingPunchKind
 } from "@/lib/time-card-missing-punch";
 import { buildCompletedConfirmationPeriod, isWeeklyConfirmationScheduleDue } from "@/lib/time-card-confirmation-schedule";
-import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
+import { getActiveSubscriptionForProduct } from "@/packages/billing/subscriptions";
 import {
   createSquareTimecard,
   hasSquareScopes,

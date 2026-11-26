@@ -11,7 +11,7 @@ import { SiteHeader } from "@/components/site-header";
 import { requireCurrentCustomer } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { isTimeCardManagerAutomationLive } from "@/lib/square-time-card-manager";
-import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
+import { getActiveSubscriptionForProduct } from "@/packages/billing/subscriptions";
 import { buildDefaultManualConfirmationPeriod } from "@/lib/time-card-confirmation-schedule";
 import { isTimeCardSmsLive } from "@/lib/twilio";
 import { isMissingPunchWorkflowLive } from "@/lib/time-card-missing-punch-workflow";

@@ -24,6 +24,7 @@ land. Final state: zero skipped, zero ALLOWED.
 - [x] 2.1 (M) `packages/identity`: auth, customers, customer-profile, shared-identity. Update imports in `apps/web`. _Done 2026-11-26 (branch `step/2.1-packages-identity`). App is still at the repo root (1.2 deferred), so imports are `@/packages/identity/...`. `packages/shared-identity` left in place (own test); `lib/admin.ts` stays with the hub. The package still imports `@/lib/db`, `@/lib/email` and `@/lib/deployment` from the app; those move in later steps (deployment.ts in 2.7)._
 - [ ] 2.2 (H) Auth-related: because 2.1 contains auth/session code, a paid reviewer looks at the diff once.
 - [ ] 2.3 (M) `packages/billing`: subscriptions, products, entitlements, Stripe wrapper. Entitlement check becomes one function: `hasAccess(account, extensionId)`.
+  _2026-11-26: split in two (AGENTS.md: move OR change). Move done on branch `step/2.3-packages-billing` (subscriptions, products, stripe → `packages/billing`). Still open: the single `hasAccess(account, extensionId)` function, as its own PR, because it changes code paths._
 - [ ] 2.4 (H) Billing diff reviewed by a human (touches Stripe).
 - [ ] 2.5 (D) `packages/connector-kit`: connection store, OAuth plumbing, token crypto, and the `TimeSource` / `ScheduleSource` interfaces (docs/ARCHITECTURE.md §4). Interfaces are *designed from what Sentinel and Cadence actually call*, not invented.
 - [ ] 2.6 (H) Token crypto/OAuth part of 2.5 reviewed by a human.
