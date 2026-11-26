@@ -8,7 +8,7 @@ import {
 } from "@/app/app/actions";
 import { ConfirmFormSubmit } from "@/components/confirm-form-submit";
 import { SiteHeader } from "@/components/site-header";
-import { requireCurrentCustomer } from "@/lib/customers";
+import { requireCurrentCustomer } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { isTimeCardManagerAutomationLive } from "@/lib/square-time-card-manager";
 import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";

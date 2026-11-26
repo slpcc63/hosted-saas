@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import type { NextRequest } from "next/server";
 
-import { auth } from "@/lib/auth";
-import { getCustomerByUserId } from "@/lib/customers";
+import { auth } from "@/packages/identity/auth";
+import { getCustomerByUserId } from "@/packages/identity/customers";
 import { getTimeCardConfirmationRequests } from "@/lib/time-card-email-workflow";
 import {
   buildTimeCardReportCsv,

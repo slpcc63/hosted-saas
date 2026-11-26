@@ -1,8 +1,8 @@
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
-import { getOrCreateCustomerProfile } from "@/lib/customers";
+import { auth } from "@/packages/identity/auth";
+import { getOrCreateCustomerProfile } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { upsertSquareConnection } from "@/lib/square-connections";
 import { installSquareCalendarSink } from "@/lib/square-calendar-sink";

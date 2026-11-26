@@ -5,7 +5,7 @@ import test from "node:test";
 import { betterAuth } from "better-auth";
 import { getMigrations } from "better-auth/db/migration";
 
-import { getEmailAndPasswordConfig } from "../lib/auth-password-config.ts";
+import { getEmailAndPasswordConfig } from "../packages/identity/auth-password-config.ts";
 
 type CapturedReset = {
   email: string;

@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 
 import { SiteHeader } from "@/components/site-header";
-import { requireCurrentCustomer } from "@/lib/customers";
+import { requireCurrentCustomer } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { getSquareCalendarSinkOverview } from "@/lib/square-calendar-sink";
 import {

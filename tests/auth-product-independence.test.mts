@@ -3,15 +3,15 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const authAndIdentityFiles = [
-  "lib/auth.ts",
-  "lib/auth-password-config.ts",
-  "lib/auth-provider-config.ts",
-  "lib/auth-recovery-content.ts",
-  "lib/auth-recovery.ts",
-  "lib/auth-redirect.ts",
-  "lib/google-sign-in.ts",
-  "lib/customer-profile-initialization.ts",
-  "lib/customers.ts"
+  "packages/identity/auth.ts",
+  "packages/identity/auth-password-config.ts",
+  "packages/identity/auth-provider-config.ts",
+  "packages/identity/auth-recovery-content.ts",
+  "packages/identity/auth-recovery.ts",
+  "packages/identity/auth-redirect.ts",
+  "packages/identity/google-sign-in.ts",
+  "packages/identity/customer-profile-initialization.ts",
+  "packages/identity/customers.ts"
 ];
 
 async function readSources(paths: string[]) {

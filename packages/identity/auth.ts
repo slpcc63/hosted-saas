@@ -1,10 +1,10 @@
 import { betterAuth } from "better-auth";
 
 import { db } from "@/lib/db";
-import { getEmailAndPasswordConfig } from "@/lib/auth-password-config";
+import { getEmailAndPasswordConfig } from "@/packages/identity/auth-password-config";
 import { getBetterAuthOrigin, getBetterAuthTrustedOrigins } from "@/lib/deployment";
-import { getGoogleProviderConfig } from "@/lib/auth-provider-config";
-import { sendPasswordResetEmail } from "@/lib/auth-recovery";
+import { getGoogleProviderConfig } from "@/packages/identity/auth-provider-config";
+import { sendPasswordResetEmail } from "@/packages/identity/auth-recovery";
 
 const authSecret =
   process.env.BETTER_AUTH_SECRET ?? "slpcc63-local-dev-secret-change-before-prod";

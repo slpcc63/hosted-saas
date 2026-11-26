@@ -2,7 +2,7 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 
-import { requireSession } from "@/lib/auth/server";
+import { requireSession } from "@/packages/identity/auth/server";
 import { db } from "@/lib/db";
 
 export type AdminUser = {

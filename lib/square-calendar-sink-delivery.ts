@@ -6,7 +6,7 @@ import {
 } from "@/lib/calendar-sink-delivery-identity";
 import { getCalendarSinkReplyToEmail } from "@/lib/calendar-sink-email";
 import { getCalendarSinkDeliveryPlan } from "@/lib/calendar-sink-delivery-plan";
-import type { CustomerProfile } from "@/lib/customers";
+import type { CustomerProfile } from "@/packages/identity/customers";
 import { getDefaultManagedSenderEmail, sendTransactionalEmail } from "@/lib/email";
 import {
   recordSquareCalendarSinkDelivery,

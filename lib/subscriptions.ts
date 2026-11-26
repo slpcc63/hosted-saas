@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import { ensureCustomerProfilesTable } from "@/lib/customers";
+import { ensureCustomerProfilesTable } from "@/packages/identity/customers";
 import { ensurePlansTable, ensureProductsTable } from "@/lib/products";
 
 export type CustomerSubscription = {

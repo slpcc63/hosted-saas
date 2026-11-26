@@ -8,7 +8,7 @@ import {
   saveTimeCardManagerSenderAction,
   saveTimeCardManagerSettingsAction
 } from "@/app/app/actions";
-import { requireCurrentCustomer } from "@/lib/customers";
+import { requireCurrentCustomer } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";
 import {

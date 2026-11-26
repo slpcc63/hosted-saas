@@ -3,8 +3,8 @@ import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { NextRequest, NextResponse } from "next/server";
 
-import { auth } from "@/lib/auth";
-import { getOrCreateCustomerProfile } from "@/lib/customers";
+import { auth } from "@/packages/identity/auth";
+import { getOrCreateCustomerProfile } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { SquarePluginId, squarePluginIds } from "@/lib/square-plugin-installations";
 import { getSquareAuthorizationUrl, isSquareConfigured } from "@/lib/square";

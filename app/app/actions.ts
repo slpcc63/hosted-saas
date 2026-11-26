@@ -3,15 +3,15 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-import { requireSession } from "@/lib/auth/server";
-import { requireAdmin } from "@/lib/authorization";
+import { requireSession } from "@/packages/identity/auth/server";
+import { requireAdmin } from "@/packages/identity/authorization";
 import { db } from "@/lib/db";
 import {
   getCustomerByUserId,
   getOrCreateCustomerProfile,
   setStripeCustomerId,
   upsertCustomerProfile
-} from "@/lib/customers";
+} from "@/packages/identity/customers";
 import { createProduct, getPublishedSubscriptionPlans } from "@/lib/products";
 import {
   createStripeBillingPortalSession,

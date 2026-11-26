@@ -4,7 +4,7 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { authClient } from "@/lib/auth-client";
+import { authClient } from "@/packages/identity/auth-client";
 
 type ResetPasswordFormProps = {
   initialError?: string;
