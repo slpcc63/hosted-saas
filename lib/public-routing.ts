@@ -1,3 +1,4 @@
+import { extensionRegistry } from "./extension-registry.ts";
 import type { ProductRuntimeId } from "./product-runtime.ts";
 
 type PublicRoutingInput = {
@@ -10,11 +11,9 @@ type PublicRoutingInput = {
 
 export function computePublicRouting(input: PublicRoutingInput) {
   const appHost = input.appHost || input.productRuntime !== null;
-  const productHomePath = input.productRuntime === "calendar-sync"
-    ? "/calendar-sink"
-    : input.productRuntime === "time-card-manager"
-      ? "/time-card-manager"
-      : null;
+  const productHomePath = input.productRuntime
+    ? extensionRegistry.byTechnicalId(input.productRuntime).homePath
+    : null;
   const dashboardPath = productHomePath ?? (
     input.timeCardManagerQaHost
       ? "/time-card-manager"

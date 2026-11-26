@@ -1,9 +1,8 @@
-export const productRuntimeIds = [
-  "calendar-sync",
-  "time-card-manager"
-] as const;
+import { extensionRegistry, type InstalledExtensionId } from "./extension-registry.ts";
 
-export type ProductRuntimeId = (typeof productRuntimeIds)[number];
+export const productRuntimeIds = extensionRegistry.technicalIds;
+
+export type ProductRuntimeId = InstalledExtensionId;
 
 type ProductRuntimeEnvironment = {
   SLPCC63_PRODUCT_RUNTIME?: string;
@@ -39,7 +38,5 @@ export function requireProductRuntime(
 }
 
 export function getProductEnvironmentPrefix(runtime: ProductRuntimeId) {
-  return runtime === "calendar-sync"
-    ? "CALENDAR_SYNC"
-    : "TIME_CARD_MANAGER";
+  return extensionRegistry.byTechnicalId(runtime).environmentPrefix;
 }

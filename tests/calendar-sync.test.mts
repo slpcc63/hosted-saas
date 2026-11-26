@@ -484,7 +484,9 @@ test("Square OAuth supports independent product application settings", async () 
     readFile(new URL("../lib/square-product-config.ts", import.meta.url), "utf8")
   ]);
 
-  assert.match(config, /pluginId === "square-calendar-sink"[\s\S]*"CALENDAR_SYNC"[\s\S]*"TIME_CARD_MANAGER"/);
+  // PLAN 2.7: per-product settings prefixes now come from the extension registry; the exact
+  // prefix values are checked in tests/extension-registry.test.mts.
+  assert.match(config, /extensionRegistry\.byProductSlug\(pluginId\)[\s\S]*environmentPrefix/);
   assert.match(config, /Only the legacy shared-root runtime/);
   assert.match(config, /runtime cannot access/);
   assert.match(source, /getSquareAuthorizationUrl\(pluginId: SquarePluginId/);
