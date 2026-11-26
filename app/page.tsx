@@ -1,8 +1,7 @@
 import { SiteHeader } from "@/components/site-header";
 import { MarketingProductCatalog } from "@/components/marketing-product-catalog";
-import { getPublishedMarketingProducts } from "@/lib/products";
+import { getPublishedSeedMarketingProducts } from "@/lib/catalog-data";
 import type { MarketingProduct } from "@/lib/products";
-import { ensureSeedCatalog } from "@/lib/seed";
 
 const closingChecklistPrototype: MarketingProduct = {
   category: "square_plugin",
@@ -23,9 +22,10 @@ const closingChecklistPrototype: MarketingProduct = {
   title: "Closing Checklist"
 };
 
-export default async function HomePage() {
-  await ensureSeedCatalog();
-  const products = await getPublishedMarketingProducts();
+// The public catalog comes from code (lib/catalog-data.ts), not the database, so the
+// homepage builds with no database and visits never write to it (PLAN 1.3).
+export default function HomePage() {
+  const products = getPublishedSeedMarketingProducts();
   const assistedDemoProducts = products.map((product) =>
     product.slug === "square-time-card-manager"
       ? {
