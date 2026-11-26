@@ -3,6 +3,8 @@ import "server-only";
 import { collectSquarePages } from "@/lib/square-pagination";
 import { classifySquareRevocationResponse } from "@/lib/square-disconnect";
 import type { SquarePluginId } from "@/lib/square-plugin-installations";
+import type { ExtensionDefinition } from "@/packages/runtime-kit/registry";
+import { extensionRegistry } from "@/lib/extension-registry";
 import { getProductRuntime } from "@/lib/product-runtime";
 import {
   getRuntimePluginId,
@@ -13,19 +15,12 @@ import {
 export type SquareEnvironment = "production" | "sandbox";
 
 const squareVersion = "2026-01-22";
-const defaultSquareScopes: Record<SquarePluginId, string[]> = {
-  "square-calendar-sink": [
-    "MERCHANT_PROFILE_READ",
-    "TIMECARDS_READ",
-    "EMPLOYEES_READ"
-  ],
-  "square-time-card-manager": [
-    "MERCHANT_PROFILE_READ",
-    "TIMECARDS_READ",
-    "TIMECARDS_WRITE",
-    "EMPLOYEES_READ"
-  ]
-};
+
+// Default scopes come from each product's registry entry (products/<id>/extension.ts).
+function getDefaultSquareScopes(pluginId: SquarePluginId): string[] {
+  const extension: ExtensionDefinition = extensionRegistry.byProductSlug(pluginId);
+  return [...(extension.connections?.square?.defaultScopes ?? [])];
+}
 
 function getSquareEnvironment(pluginId?: SquarePluginId): SquareEnvironment {
   const runtime = getProductRuntime();
@@ -62,7 +57,7 @@ export function getSquareScopes(pluginId: SquarePluginId) {
   const configuredScopes = getSquareProductEnvironmentValue(pluginId, "SCOPES").trim();
 
   if (!configuredScopes) {
-    return defaultSquareScopes[pluginId];
+    return getDefaultSquareScopes(pluginId);
   }
 
   return configuredScopes

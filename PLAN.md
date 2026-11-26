@@ -23,12 +23,14 @@ land. Final state: zero skipped, zero ALLOWED.
 ## Phase 2 — Shared packages (each one: copy-free move, then delete duplicates)
 - [x] 2.1 (M) `packages/identity`: auth, customers, customer-profile, shared-identity. Update imports in `apps/web`. _Done 2026-11-26 (branch `step/2.1-packages-identity`). App is still at the repo root (1.2 deferred), so imports are `@/packages/identity/...`. `packages/shared-identity` left in place (own test); `lib/admin.ts` stays with the hub. The package still imports `@/lib/db`, `@/lib/email` and `@/lib/deployment` from the app; those move in later steps (deployment.ts in 2.7)._
 - [ ] 2.2 (H) Auth-related: because 2.1 contains auth/session code, a paid reviewer looks at the diff once.
-- [ ] 2.3 (M) `packages/billing`: subscriptions, products, entitlements, Stripe wrapper. Entitlement check becomes one function: `hasAccess(account, extensionId)`.
+- [x] 2.3 (M) `packages/billing`: subscriptions, products, entitlements, Stripe wrapper. Entitlement check becomes one function: `hasAccess(account, extensionId)`.
+  _2026-11-26 (later): part 2 needs no code: one access function already exists (`getActiveSubscriptionForProduct`). Calendar Sync's missing subscription gate and the past_due policy move to Stage 3 (owner OK)._
   _2026-11-26: split in two (AGENTS.md: move OR change). Move done on branch `step/2.3-packages-billing` (subscriptions, products, stripe → `packages/billing`). Still open: the single `hasAccess(account, extensionId)` function, as its own PR, because it changes code paths._
 - [ ] 2.4 (H) Billing diff reviewed by a human (touches Stripe).
 - [ ] 2.5 (D) `packages/connector-kit`: connection store, OAuth plumbing, token crypto, and the `TimeSource` / `ScheduleSource` interfaces (docs/ARCHITECTURE.md §4). Interfaces are *designed from what Sentinel and Cadence actually call*, not invented.
 - [ ] 2.6 (H) Token crypto/OAuth part of 2.5 reviewed by a human.
 - [ ] 2.7 (D) `packages/runtime-kit` + extension **registry**: replace the hardcoded product-id/env-prefix ternary in `product-runtime`; move `TCM_QA_APP_ORIGIN` out of shared `deployment.ts`; delete its allow-list entry.
+  _2026-11-26: owner approved doing 2.7 before 2.5 (Square connection code had product names hardcoded). Part 1 on branch `step/2.7-extension-registry`: `packages/runtime-kit/registry.ts` (provider-neutral) + `lib/extension-registry.ts` (both entries); product-runtime prefix, Square plugin id/prefix/legacy settings, default scopes and product home paths now read the registry. Part 2 still open: `TCM_QA_APP_ORIGIN` / `TCM_QA_HOST` (needs a Vercel setting rename; owner decision)._
   Proof: `guardrails.config.json` `allow` is empty; boundary check passes with no ALLOWED lines.
 - [ ] 2.8 (M) Dashboard reads extensions from the registry instead of importing Sentinel's `getTimeCardManagerOverview`; `seed.ts` stops hardcoding product slugs.
   Proof: `apps/web` builds with `apps/sentinel` and `apps/cadence` temporarily deleted (`rm -rf` in a scratch clone, paste output).

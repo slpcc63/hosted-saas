@@ -392,3 +392,73 @@ Test count before → after: 102 → 105.
 
 ### 6. Next
 2.3 part 2 — `hasAccess(account, extensionId)`.
+
+## PLAN 2.7 (part 1) — Extension registry (Claude, 2026-11-26; order change owner-approved)
+
+### 1. In plain language
+Each product (Cadence, Sentinel) now has one entry listing its facts: ID, catalog ID, settings prefix,
+home page and Square permissions. Code that used to say "if Calendar Sync … else Time Card Manager"
+now looks the answer up in that entry. Adding a product (Trace, Lens) means adding an entry, not editing
+shared code in four places. The shared registry code never names a product or Square; a product lists
+the services it connects to by name (`connections: { square: … }`), and products with none (Trace, Lens)
+simply leave it out.
+
+### 2. Could a customer notice?
+No. I ran the old and new code on the same inputs and got identical answers for: plugin ID per product,
+settings prefix, Square setting lookups (including the legacy unprefixed fallback and the cross-product
+block), the legacy redirect address, and each product's home page.
+```
+old: ["square-calendar-sink","square-time-card-manager","CALENDAR_SYNC","TIME_CARD_MANAGER","cal-app","tcm-app","sandbox","","","https://hosted-saas.vercel.app/api/integrations/square/callback","","","/calendar-sink","/time-card-manager","/dashboard"]
+new: ["square-calendar-sink","square-time-card-manager","CALENDAR_SYNC","TIME_CARD_MANAGER","cal-app","tcm-app","sandbox","","","https://hosted-saas.vercel.app/api/integrations/square/callback","","","/calendar-sink","/time-card-manager","/dashboard"]
+```
+Default Square permissions are pinned by a test against the exact old lists.
+
+### 3. What changed
+- New `packages/runtime-kit/registry.ts`: entry shape + checks (unique ID/slug/prefix, valid home path,
+  any declared connection must list scopes).
+- New `lib/extension-registry.ts`: the two entries. Both live in this one app file because a per-product
+  file under `products/<id>/` pulled Sentinel's file into Cadence's import graph (the isolation test caught
+  it on the first attempt). Each app gets its own registry when Sentinel/Cadence become separate apps.
+- `lib/product-runtime.ts`, `lib/square-product-config.ts`, `lib/square.ts`, `lib/public-routing.ts`:
+  read the registry instead of hardcoded product branches.
+- New `tests/extension-registry.test.mts` (7 tests) + its `package.json` script.
+- **Test assertion changed (AGENTS.md §5.2, needs owner approval):** `tests/calendar-sync.test.mts`
+  "Square OAuth supports independent product application settings" checked the source text for the old
+  hardcoded `pluginId === "square-calendar-sink" … "CALENDAR_SYNC" … "TIME_CARD_MANAGER"`. It now checks
+  that the settings prefix comes from the registry; the actual prefix values are checked by the new tests.
+  The other five assertions in that test are unchanged.
+- First attempt put "Square" in the shared registry; the boundary check failed it. Fixed by making the
+  registry provider-neutral (`connections`), not by touching the check.
+No dependencies added.
+
+### 4. Required checks
+```
+$ node scripts/check-boundaries.mjs
+Boundary check: 32 files scanned, 7 rules.
+PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages
+✔ no dependency violations found (39 modules, 36 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck
+exit 0
+$ npm test
+tests 112 / pass 112 / fail 0
+$ DATABASE_URL unset; npx next build
+exit 0
+$ npm run build:product-contracts
+exit 0
+$ (products/time-card-manager) TIME_CARD_MANAGER_DATABASE_URL=<placeholder> npx next build   exit 0
+$ (products/calendar-sync) CALENDAR_SYNC_DATABASE_URL=<placeholder> npx next build           exit 0
+$ bash scripts/check-isolation.sh sentinel
+SKIPPED: apps/sentinel does not exist yet.
+```
+Test count before → after: 105 → 112 (npm test also gained the registry suite).
+
+### 5. NOT VERIFIED
+- Connecting Square on the PR Preview (Square sandbox apps are owner config; Cadence's QA sandbox app is
+  known-missing from the Nov 16 baseline).
+- PLAN 2.7 part 2 (`TCM_QA_APP_ORIGIN`, `TCM_QA_HOST`): not done; needs a Vercel setting rename.
+
+### 6. Next
+Owner: approve the one assertion change. Then 2.7 part 2 decision, then 2.8 (dashboard reads registry).

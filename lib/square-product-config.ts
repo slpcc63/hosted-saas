@@ -1,21 +1,18 @@
+import type { ExtensionDefinition } from "../packages/runtime-kit/registry.ts";
+import { extensionRegistry, type InstalledProductSlug } from "./extension-registry.ts";
 import {
-  getProductEnvironmentPrefix,
   getProductRuntime,
   type ProductRuntimeId
 } from "./product-runtime.ts";
 
-export type SquareProductPluginId =
-  | "square-calendar-sink"
-  | "square-time-card-manager";
+export type SquareProductPluginId = InstalledProductSlug;
 
 type SquareConfigurationEnvironment = Record<string, string | undefined> & {
   SLPCC63_PRODUCT_RUNTIME?: string;
 };
 
 export function getRuntimePluginId(runtime: ProductRuntimeId): SquareProductPluginId {
-  return runtime === "calendar-sync"
-    ? "square-calendar-sink"
-    : "square-time-card-manager";
+  return extensionRegistry.byTechnicalId(runtime).productSlug;
 }
 
 export function getSquareProductEnvironmentValue(
@@ -32,16 +29,15 @@ export function getSquareProductEnvironmentValue(
     throw new Error(`${runtime} runtime cannot access ${pluginId} Square configuration.`);
   }
 
-  const prefix = pluginId === "square-calendar-sink"
-    ? "CALENDAR_SYNC"
-    : "TIME_CARD_MANAGER";
+  const extension: ExtensionDefinition = extensionRegistry.byProductSlug(pluginId);
+  const prefix = extension.environmentPrefix;
   const productValue = resolvedEnvironment[`${prefix}_SQUARE_${name}`];
 
   if (productValue !== undefined) return productValue;
 
-  // Only the legacy shared-root runtime may read Calendar Sync's historical
-  // unprefixed settings while it is being retired.
-  if (!runtime && pluginId === "square-calendar-sink") {
+  // Only the legacy shared-root runtime may read a product's historical
+  // unprefixed settings while they are being retired (declared in the registry).
+  if (!runtime && extension.connections?.square?.legacyUnprefixedSettings) {
     return resolvedEnvironment[`SQUARE_${name}`] ?? "";
   }
 
@@ -60,7 +56,7 @@ export function getSquareProductRedirectUri(
   const runtime = environment
     ? getProductRuntime(environment)
     : getProductRuntime();
-  return !runtime && pluginId === "square-calendar-sink"
-    ? "https://hosted-saas.vercel.app/api/integrations/square/callback"
-    : "";
+  const extension: ExtensionDefinition = extensionRegistry.byProductSlug(pluginId);
+  const legacyRedirectUri = extension.connections?.square?.legacyRedirectUri;
+  return !runtime && legacyRedirectUri ? legacyRedirectUri : "";
 }
