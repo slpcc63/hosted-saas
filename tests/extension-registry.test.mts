@@ -43,7 +43,7 @@ test("registry reproduces each product's plugin id, settings prefix, home path a
     assert.equal(getProductEnvironmentPrefix(runtime), expected.prefix, id);
     assert.deepEqual([...(entry.connections?.square?.defaultScopes ?? [])], [...expected.scopes], id);
     assert.equal(
-      computePublicRouting({ appHost: false, hostname: "x", preview: false, productRuntime: runtime, timeCardManagerQaHost: false }).dashboardPath,
+      computePublicRouting({ appHost: false, hostname: "x", preview: false, productRuntime: runtime, qaFocusHomePath: null }).dashboardPath,
       expected.homePath,
       id
     );
@@ -115,4 +115,21 @@ test("a product without Square fits the registry (Trace, Lens)", () => {
     { technicalId: "no-square", displayName: "No Square", productSlug: "no-square", homePath: "/no-square", environmentPrefix: "NO_SQUARE" }
   ]);
   assert.equal(registry.byProductSlug("no-square").connections, undefined);
+});
+
+test("Sentinel's QA deployment settings keep their existing names (no Vercel change needed)", () => {
+  const sentinel: ExtensionDefinition = extensionRegistry.byTechnicalId("time-card-manager");
+  const cadence: ExtensionDefinition = extensionRegistry.byTechnicalId("calendar-sync");
+  assert.deepEqual(sentinel.qa, {
+    hostSetting: "TCM_QA_HOST",
+    appOriginSetting: "TCM_QA_APP_ORIGIN",
+    databaseUrlSetting: "TCM_QA_DATABASE_URL"
+  });
+  assert.equal(cadence.qa, undefined);
+});
+
+test("shared host, routing, origin and database code name no product QA setting", () => {
+  for (const file of ["lib/deployment.ts", "lib/product-host.ts", "lib/request-routing.ts", "lib/public-routing.ts", "lib/database-url.ts"]) {
+    assert.doesNotMatch(readFileSync(resolve(root, file), "utf8"), /TCM_QA_|TimeCardManagerQa/, file);
+  }
 });

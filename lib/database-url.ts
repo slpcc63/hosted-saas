@@ -1,3 +1,4 @@
+import { findQaDatabaseUrl } from "./extension-registry.ts";
 import {
   getProductEnvironmentPrefix,
   getProductRuntime
@@ -6,13 +7,10 @@ import {
 const localDatabaseUrl =
   "postgresql://postgres:postgres@127.0.0.1:5432/slpcc63?sslmode=disable";
 
-type DatabaseEnvironment = {
-  CALENDAR_SYNC_DATABASE_URL?: string;
+type DatabaseEnvironment = Readonly<Record<string, string | undefined>> & {
   DATABASE_URL?: string;
   DATABASE_URL_UNPOOLED?: string;
   SLPCC63_PRODUCT_RUNTIME?: string;
-  TCM_QA_DATABASE_URL?: string;
-  TIME_CARD_MANAGER_DATABASE_URL?: string;
 };
 
 export function selectDatabaseUrl(
@@ -24,9 +22,7 @@ export function selectDatabaseUrl(
     : getProductRuntime();
 
   if (runtime) {
-    const key = `${getProductEnvironmentPrefix(runtime)}_DATABASE_URL` as
-      | "CALENDAR_SYNC_DATABASE_URL"
-      | "TIME_CARD_MANAGER_DATABASE_URL";
+    const key = `${getProductEnvironmentPrefix(runtime)}_DATABASE_URL`;
     const productUrl = resolvedEnvironment[key];
 
     if (!productUrl?.trim()) {
@@ -36,7 +32,7 @@ export function selectDatabaseUrl(
     return productUrl;
   }
 
-  return resolvedEnvironment.TCM_QA_DATABASE_URL ??
+  return findQaDatabaseUrl(resolvedEnvironment) ??
     resolvedEnvironment.DATABASE_URL ??
     resolvedEnvironment.DATABASE_URL_UNPOOLED ??
     localDatabaseUrl;

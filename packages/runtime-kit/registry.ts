@@ -13,6 +13,17 @@ export type ConnectionSettings = {
   readonly legacyRedirectUri?: string;
 };
 
+// A QA deployment that opens straight into one product. Each value names the environment setting
+// to read (the setting names are the product's own; shared code only reads what is named here).
+export type QaFocusSettings = {
+  // Hostname that should open straight into this product (e.g. a QA subdomain).
+  readonly hostSetting: string;
+  // Overrides the app origin used in links and auth when set.
+  readonly appOriginSetting: string;
+  // Database URL that takes precedence over DATABASE_URL on the shared runtime when set.
+  readonly databaseUrlSetting: string;
+};
+
 export type ExtensionDefinition = {
   // Runtime id (SLPCC63_PRODUCT_RUNTIME value, products/<id> folder).
   readonly technicalId: string;
@@ -26,6 +37,8 @@ export type ExtensionDefinition = {
   // Outside services the product connects to, keyed by provider name. Absent for products that
   // connect to none.
   readonly connections?: Readonly<Record<string, ConnectionSettings>>;
+  // Present only for a product with a dedicated QA deployment.
+  readonly qa?: QaFocusSettings;
 };
 
 export type ExtensionRegistry<T extends ExtensionDefinition> = {

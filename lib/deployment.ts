@@ -1,3 +1,5 @@
+import { findQaAppOrigin } from "./extension-registry.ts";
+
 function getVercelPreviewOrigin(environment: NodeJS.ProcessEnv) {
   const vercelUrl = environment.VERCEL_URL?.trim();
   return vercelUrl ? `https://${vercelUrl}` : null;
@@ -66,12 +68,9 @@ export function isPreviewDeployment(
   );
 }
 
-function getTimeCardManagerQaOrigin(environment: NodeJS.ProcessEnv) {
-  return environment.TCM_QA_APP_ORIGIN?.trim().replace(/\/$/, "") || null;
-}
 
 export function getAppOrigin(environment: NodeJS.ProcessEnv = process.env) {
-  const qaOrigin = getTimeCardManagerQaOrigin(environment);
+  const qaOrigin = findQaAppOrigin(environment);
 
   if (qaOrigin) {
     return qaOrigin;
@@ -89,7 +88,7 @@ export function getAppOrigin(environment: NodeJS.ProcessEnv = process.env) {
 export function getMarketingOrigin(
   environment: NodeJS.ProcessEnv = process.env
 ) {
-  const qaOrigin = getTimeCardManagerQaOrigin(environment);
+  const qaOrigin = findQaAppOrigin(environment);
 
   if (qaOrigin) {
     return qaOrigin;
