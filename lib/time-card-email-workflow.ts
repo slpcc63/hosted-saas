@@ -9,7 +9,7 @@ import { sendTransactionalEmail } from "@/lib/email";
 import { getValidSquareConnection } from "@/lib/square-connections";
 import { hasSquareScopes, searchSquareTeamMembers } from "@/lib/square";
 import { parseEmployeeTimeResponse } from "@/lib/time-card-response-parser";
-import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
+import { getActiveSubscriptionForProduct } from "@/packages/billing/subscriptions";
 import { isTimeCardSmsLive, sendTwilioMessage } from "@/lib/twilio";
 import {
   buildTimeCardConfirmationSmsBody,

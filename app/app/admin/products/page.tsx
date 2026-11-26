@@ -3,7 +3,7 @@ import { createProductAction } from "@/app/app/actions";
 import { requireAdminUser } from "@/lib/admin";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";
-import { getAdminProducts } from "@/lib/products";
+import { getAdminProducts } from "@/packages/billing/products";
 
 type AdminProductsPageProps = {
   searchParams?: Promise<{

@@ -2,7 +2,7 @@
 // public homepage can render it at build time without a database (PLAN 1.3).
 // lib/seed.ts writes this same data to the database for the app pages.
 
-import type { MarketingProduct } from "@/lib/products";
+import type { MarketingProduct } from "@/packages/billing/products";
 
 export type SeedPlan = {
   billingInterval: string;
@@ -99,7 +99,7 @@ export const seedProducts: SeedProduct[] = [
   }
 ];
 
-// Same selection and ordering as getPublishedMarketingProducts() in lib/products.ts,
+// Same selection and ordering as getPublishedMarketingProducts() in packages/billing/products.ts,
 // computed from the seed data instead of the database.
 export function getPublishedSeedMarketingProducts(): MarketingProduct[] {
   const products = seedProducts

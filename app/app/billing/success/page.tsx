@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation";
 
 import { requireCurrentCustomer } from "@/packages/identity/customers";
-import { getPublishedSubscriptionPlans } from "@/lib/products";
+import { getPublishedSubscriptionPlans } from "@/packages/billing/products";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";
-import { getStripeCheckoutSession, isStripeConfigured } from "@/lib/stripe";
-import { upsertStripeSubscriptionForCustomer } from "@/lib/subscriptions";
+import { getStripeCheckoutSession, isStripeConfigured } from "@/packages/billing/stripe";
+import { upsertStripeSubscriptionForCustomer } from "@/packages/billing/subscriptions";
 
 type BillingSuccessPageProps = {
   searchParams?: Promise<{

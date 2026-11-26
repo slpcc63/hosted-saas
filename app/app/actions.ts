@@ -12,13 +12,13 @@ import {
   setStripeCustomerId,
   upsertCustomerProfile
 } from "@/packages/identity/customers";
-import { createProduct, getPublishedSubscriptionPlans } from "@/lib/products";
+import { createProduct, getPublishedSubscriptionPlans } from "@/packages/billing/products";
 import {
   createStripeBillingPortalSession,
   createStripeCheckoutSession,
   createStripeCustomer,
   isStripeConfigured
-} from "@/lib/stripe";
+} from "@/packages/billing/stripe";
 import { parseManagedSenderLocalPart } from "@/lib/email";
 import {
   addTimeCardManagerScheduleEntry,
@@ -34,7 +34,7 @@ import {
 import {
   getActiveSubscriptionForProduct,
   updateSubscriptionCustomSettings
-} from "@/lib/subscriptions";
+} from "@/packages/billing/subscriptions";
 import {
   createAndSendTimeCardConfirmationRequest,
   resendTimeCardConfirmationRequest,

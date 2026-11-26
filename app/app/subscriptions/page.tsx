@@ -4,11 +4,11 @@ import {
   subscribeToPlanAction
 } from "@/app/app/actions";
 import { requireCurrentCustomer } from "@/packages/identity/customers";
-import { getPublishedSubscriptionPlans } from "@/lib/products";
+import { getPublishedSubscriptionPlans } from "@/packages/billing/products";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";
-import { isStripeConfigured } from "@/lib/stripe";
-import { getSubscriptionsForCustomer } from "@/lib/subscriptions";
+import { isStripeConfigured } from "@/packages/billing/stripe";
+import { getSubscriptionsForCustomer } from "@/packages/billing/subscriptions";
 
 type SubscriptionsPageProps = {
   searchParams?: Promise<{

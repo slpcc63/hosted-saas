@@ -2,7 +2,7 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { seedProducts, type SeedPlan, type SeedProduct } from "@/lib/catalog-data";
-import { ensurePlansTable, ensureProductsTable, Product } from "@/lib/products";
+import { ensurePlansTable, ensureProductsTable, Product } from "@/packages/billing/products";
 
 
 type SeededCatalog = {

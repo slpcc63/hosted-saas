@@ -26,7 +26,7 @@ import {
   searchSquareTeamMembers,
   SquareTeamMember
 } from "@/lib/square";
-import { getActiveSubscriptionForProduct } from "@/lib/subscriptions";
+import { getActiveSubscriptionForProduct } from "@/packages/billing/subscriptions";
 
 const pluginId: SquarePluginId = "square-calendar-sink";
 export const requiredSquareCalendarScopes = ["TIMECARDS_READ", "EMPLOYEES_READ"];

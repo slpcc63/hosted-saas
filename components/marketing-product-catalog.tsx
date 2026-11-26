@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import type { MarketingProduct } from "@/lib/products";
+import type { MarketingProduct } from "@/packages/billing/products";
 
 type MarketingProductCatalogProps = {
   products: MarketingProduct[];

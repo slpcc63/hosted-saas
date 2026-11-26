@@ -295,3 +295,63 @@ None found. AGENTS.md §5.3 lists auth code as stop-and-ask: flagged to the owne
 
 ### 8. Next PLAN item
 2.2 review, then 2.3 `packages/billing`.
+
+## PLAN 2.3 (part 1 of 2) — Billing code moved into `packages/billing` (Claude, 2026-11-26)
+
+### 1. In plain language
+The three files for plans and products, subscriptions, and Stripe (checkout and billing portal) moved
+from `lib/` into `packages/billing/`. Nothing inside them changed except one import line. Every file that
+used them now points at the new place. The "one access check" part of 2.3 is a real code change, so it
+gets its own PR next.
+
+### 2. Could a customer notice?
+No. `products.ts` and `stripe.ts` are byte-identical after the move; `subscriptions.ts` differs only in
+one import line (it now imports products from its own package).
+
+### 3. What changed
+- Moved (history kept): `lib/subscriptions.ts`, `lib/products.ts`, `lib/stripe.ts` → `packages/billing/`.
+- 13 other files: import paths only. One code comment in `lib/catalog-data.ts` updated to the new path.
+- New `packages/billing/package.json` (name only). No dependencies added.
+
+### 4. Known leftovers (not hidden)
+`packages/billing` still imports `@/lib/db` and `@/lib/deployment` (for the app address used in Stripe
+return links), same situation as identity. None of the three files names a product or Square.
+
+### 5. Required checks
+```
+$ node scripts/check-boundaries.mjs
+Boundary check: 30 files scanned, 7 rules.   (shared rules now also cover packages/billing)
+PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages
+✔ no dependency violations found (38 modules, 36 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck
+exit 0
+$ npm test
+tests 102 / pass 102 / fail 0
+$ DATABASE_URL unset; npx next build
+exit 0
+$ npm run build:product-contracts
+exit 0
+$ bash scripts/check-isolation.sh sentinel
+SKIPPED: apps/sentinel does not exist yet.
+```
+
+### 6. NOT VERIFIED
+- Subscriptions page and admin products page on the PR Preview (owner click-through; use the Preview's
+  unique deployment address, not the branch address, until the origin fix lands).
+- Stripe checkout: off by design (`BILLING_CHECKOUT_ENABLED` not true), so not exercised.
+- PLAN 2.4 review (Stripe code moved). Diff is import paths only.
+
+### 7. Risks and surprises (found this session, not caused by this PR)
+- Preview branch addresses (`hosted-saas-git-<branch>…`) fail sign-in with "Invalid origin": only
+  `VERCEL_URL` (the unique deployment address) is trusted. Confirmed on `integration/v1` too. Fix proposed
+  as a separate auth PR (trust `VERCEL_BRANCH_URL`), pending owner OK.
+- Password reset on the PR #7 Preview: request returned 200 with no error logged (so Resend accepted it,
+  or the error was swallowed), but the email did not arrive at an iCloud address, junk included. Not yet
+  diagnosed: needs the Resend dashboard (delivery status) and a check of the slpcc63.com sending-domain
+  DNS records. Affects every email the platform sends, including Sentinel's.
+
+### 8. Next PLAN item
+2.3 part 2 — `hasAccess(account, extensionId)`; then 2.4 review.
