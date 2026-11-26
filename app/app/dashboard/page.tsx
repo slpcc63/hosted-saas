@@ -4,7 +4,16 @@ import { isAdmin } from "@/packages/identity/authorization";
 import { getOrCreateCustomerProfile } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";
-import { getTimeCardManagerOverview } from "@/lib/square-time-card-manager";
+import type { DashboardAction } from "@/packages/runtime-kit/dashboard";
+import { dashboardProviders } from "./providers";
+
+function ActionLink({ action }: { action: DashboardAction }) {
+  return (
+    <a className={action.primary ? "pill primary" : "pill"} href={action.href}>
+      {action.label}
+    </a>
+  );
+}
 
 type DashboardPageProps = {
   searchParams?: Promise<{
@@ -27,9 +36,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const admin = await isAdmin(session.user.id);
   const params = await searchParams;
   const displayName = customer.contactName ?? customer.companyName ?? session.user.email;
-  const timeCardOverview = await getTimeCardManagerOverview(customer.id);
-  const timeCardPath = routing.appHost ? "/time-card-manager" : "/app/time-card-manager";
-  const subscriptionsPath = routing.appHost ? "/subscriptions" : "/app/subscriptions";
+  const appPath = (path: string) => (routing.appHost ? path : `/app${path}`);
+  const summaries = await Promise.all(
+    dashboardProviders.map((provider) => provider({ customerId: customer.id, appPath }))
+  );
 
   return (
     <>
@@ -43,15 +53,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               This dashboard is tied to your customer account, subscription
               status, and current Time Card Manager setup.
             </p>
-            {timeCardOverview.alertMessage ? (
-              <div className="dashboard-alert warning">
-                <strong>Time card texting paused</strong>
-                <p>{timeCardOverview.alertMessage}</p>
-                <a className="pill" href={subscriptionsPath}>
-                  Manage subscription
-                </a>
-              </div>
-            ) : null}
+            {summaries.map((summary) =>
+              summary.alert ? (
+                <div className="dashboard-alert warning" key={`alert-${summary.extensionId}`}>
+                  <strong>{summary.alert.title}</strong>
+                  <p>{summary.alert.message}</p>
+                  {summary.alert.action ? <ActionLink action={summary.alert.action} /> : null}
+                </div>
+              ) : null
+            )}
             {params?.saved === "square_connection" ? (
               <p className="form-success">Square connected successfully.</p>
             ) : null}
@@ -66,16 +76,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                 <strong>Account</strong>
                 {customer.email}
               </div>
-              <div className="stat">
-                <strong>Subscriptions</strong>
-                {timeCardOverview.entitlement ? timeCardOverview.entitlement.packageName : "No time card plan yet"}
-              </div>
-              <div className="stat">
-                <strong>Billing</strong>
-                {timeCardOverview.currentUsage
-                  ? `${timeCardOverview.currentUsage.textsSentCount}/${timeCardOverview.entitlement?.monthlyTextLimit ?? 0} texts used`
-                  : "No text usage yet"}
-              </div>
+              {summaries.flatMap((summary) =>
+                (summary.headlineStats ?? []).map((stat) => (
+                  <div className="stat" key={`${summary.extensionId}-${stat.label}`}>
+                    <strong>{stat.label}</strong>
+                    {stat.value}
+                  </div>
+                ))
+              )}
             </div>
             <div className="metric">
               <strong>Customer Profile</strong>
@@ -83,65 +91,32 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               access, and plugin settings.
             </div>
             <div className="stack-list">
-              <article className="dashboard-subcard">
-                <div className="subcard-header">
-                  <div>
-                    <h2>Square Time Card Manager</h2>
-                    <p>
-                      {timeCardOverview.entitlement
-                        ? `Configured mode: ${timeCardOverview.settings.notificationMode.replaceAll("_", " ")}`
-                        : "Subscribe first to unlock time card notification controls."}
-                    </p>
+              {summaries.map(({ extensionId, card }) => (
+                <article className="dashboard-subcard" key={extensionId}>
+                  <div className="subcard-header">
+                    <div>
+                      <h2>{card.title}</h2>
+                      <p>{card.description}</p>
+                    </div>
+                    {card.statusLabel ? <span className="status-chip">{card.statusLabel}</span> : null}
                   </div>
-                  <span className="status-chip">
-                    {timeCardOverview.textingLive
-                      ? timeCardOverview.delivery.effectiveMode.replaceAll("_", " ")
-                      : "email live"}
-                  </span>
-                </div>
-                {timeCardOverview.entitlement ? (
-                  <>
+                  {card.stats.length ? (
                     <div className="stat-row compact">
-                      <div className="stat">
-                        <strong>Package</strong>
-                        {timeCardOverview.entitlement.packageName}
-                      </div>
-                      <div className="stat">
-                        <strong>Texts left</strong>
-                        {timeCardOverview.delivery.textsRemaining}
-                      </div>
-                      <div className="stat">
-                        <strong>Next run</strong>
-                        {timeCardOverview.nextRunLabel
-                          ? timeCardOverview.automationLive
-                            ? timeCardOverview.nextRunLabel
-                            : `${timeCardOverview.nextRunLabel} (cron setup needed)`
-                          : timeCardOverview.automationLive
-                            ? "Automation off"
-                            : "Cron setup needed"}
-                      </div>
-                      <div className="stat">
-                        <strong>Email sender</strong>
-                        {timeCardOverview.senderProfile.fromEmail}
-                      </div>
+                      {card.stats.map((stat) => (
+                        <div className="stat" key={stat.label}>
+                          <strong>{stat.label}</strong>
+                          {stat.value}
+                        </div>
+                      ))}
                     </div>
-                    <div className="subscription-actions">
-                      <a className="pill primary" href={timeCardPath}>
-                        Manage time card settings
-                      </a>
-                      <a className="pill" href={subscriptionsPath}>
-                        Manage subscription
-                      </a>
-                    </div>
-                  </>
-                ) : (
+                  ) : null}
                   <div className="subscription-actions">
-                    <a className="pill primary" href={subscriptionsPath}>
-                      Subscribe to Time Card Manager
-                    </a>
+                    {card.actions.map((action) => (
+                      <ActionLink action={action} key={action.label} />
+                    ))}
                   </div>
-                )}
-              </article>
+                </article>
+              ))}
             </div>
           </section>
 

@@ -462,3 +462,66 @@ Test count before → after: 105 → 112 (npm test also gained the registry suit
 
 ### 6. Next
 Owner: approve the one assertion change. Then 2.7 part 2 decision, then 2.8 (dashboard reads registry).
+
+## PLAN 2.8 — Dashboard draws product cards it is given (Claude, 2026-11-26; owner chose option A)
+
+### 1. In plain language
+The customer dashboard used to call Time Card Manager's code directly and lay out its card itself.
+Now each product hands the dashboard a "card" made of plain data (title, status, figures, buttons, an
+optional alert), and the dashboard draws whatever cards it receives. Cadence, Trace and Lens can add
+cards later without editing the dashboard.
+
+### 2. Could a customer notice?
+No. I rendered the old and new dashboard HTML for the same data and compared them:
+```
+IDENTICAL  appHost=true  no plan  (1749 chars)
+IDENTICAL  appHost=true  plan, texting live, next run  (2049 chars)
+IDENTICAL  appHost=true  plan, cron missing, alert  (2230 chars)
+IDENTICAL  appHost=true  plan, automation off  (2041 chars)
+IDENTICAL  appHost=false  no plan  (1753 chars)
+IDENTICAL  appHost=false  plan, texting live, next run  (2057 chars)
+IDENTICAL  appHost=false  plan, cron missing, alert  (2242 chars)
+IDENTICAL  appHost=false  plan, automation off  (2049 chars)
+ALL IDENTICAL
+```
+(One-off script: old JSX copied from `origin/integration/v1`, new JSX from this branch, both rendered
+with react-dom/server. Not kept in the repo; the wording is pinned by the new unit tests instead.)
+
+### 3. What changed
+- New `packages/runtime-kit/dashboard.ts`: the card contract (no product names).
+- New `lib/square-time-card-manager-dashboard-summary.ts` (Sentinel's card, plain function) and
+  `lib/square-time-card-manager-dashboard.ts` (loads Sentinel's data and builds the card).
+- New `app/app/dashboard/providers.ts`: the list of card providers, the dashboard's only link to products.
+- `app/app/dashboard/page.tsx`: draws cards, figures and alerts generically; no Sentinel import.
+- New `tests/dashboard-registry.test.mts` (3 tests) + script.
+No dependencies added. No tests edited.
+
+### 4. Still as before (on purpose, Stage 3)
+The dashboard intro sentence and "Current focus" panel still mention Time Card Manager; there is still
+no Cadence card. Found: the catalog lists Calendar Sync as `square-calendar-sync` while subscriptions
+and Square installations use `square-calendar-sink`. Not changed (stored data); Stage 3 catalog work.
+
+### 5. Required checks
+```
+$ node scripts/check-boundaries.mjs
+Boundary check: 34 files scanned, 7 rules.
+PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages
+✔ no dependency violations found (40 modules, 36 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck                                   exit 0
+$ npm test                                            tests 115 / pass 115 / fail 0
+$ DATABASE_URL unset; npx next build                  exit 0
+$ npm run build:product-contracts                     exit 0
+$ product app builds (placeholder DB URL)             time-card-manager exit 0, calendar-sync exit 0
+$ bash scripts/check-isolation.sh sentinel            SKIPPED: apps/sentinel does not exist yet.
+```
+Test count before → after: 112 → 115.
+
+### 6. NOT VERIFIED
+- Live dashboard on the PR Preview with real data (owner click-through: sign in, open Dashboard,
+  compare with QA).
+
+### 7. Next
+2.7 part 2 (owner chose A: keep `TCM_QA_*` names, move them into Sentinel's registry entry).
