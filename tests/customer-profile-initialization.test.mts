@@ -7,7 +7,7 @@ import {
   getOrCreateCustomerProfileRow,
   type CustomerProfileQuery,
   type CustomerProfileRow
-} from "../lib/customer-profile-initialization.ts";
+} from "../packages/identity/customer-profile-initialization.ts";
 
 function profileRow(overrides: Partial<CustomerProfileRow> = {}): CustomerProfileRow {
   return {

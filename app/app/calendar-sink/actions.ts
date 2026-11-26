@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { requireCurrentCustomer } from "@/lib/customers";
+import { requireCurrentCustomer } from "@/packages/identity/customers";
 import { getAppOrigin } from "@/lib/deployment";
 import { getPublicRouting } from "@/lib/request-routing";
 import {

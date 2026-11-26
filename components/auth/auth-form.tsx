@@ -4,8 +4,8 @@ import type { FormEvent } from "react";
 import Link from "next/link";
 import { useState } from "react";
 
-import { authClient } from "@/lib/auth-client";
-import { runGoogleSignIn } from "@/lib/google-sign-in";
+import { authClient } from "@/packages/identity/auth-client";
+import { runGoogleSignIn } from "@/packages/identity/google-sign-in";
 
 type AuthFormProps = {
   googleEnabled: boolean;

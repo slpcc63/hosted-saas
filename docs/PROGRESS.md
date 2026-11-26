@@ -237,3 +237,61 @@ Test count before → after: 99 → 102.
 
 ### 9. Next PLAN item
 2.1 — `packages/identity` (then 2.2 review).
+
+## PLAN 2.1 — Sign-in and customer-account code moved into `packages/identity` (Claude, 2026-11-26)
+
+### 1. In plain language
+The 12 files that handle sign-in, password reset, Google sign-in, admin checks and customer profiles
+moved from `lib/` into one shared folder, `packages/identity/`. Nothing inside them changed except the
+lines that say where other files are. Every page and file that used them now points at the new place.
+
+### 2. Could a customer notice?
+No. This is a move. 8 files are byte-identical after the move; the other 4 differ only in import lines.
+
+### 3. What changed
+- Moved (git history kept): `auth`, `auth-client`, `auth-password-config`, `auth-provider-config`,
+  `auth-recovery`, `auth-recovery-content`, `auth-redirect`, `auth/server`, `authorization`, `customers`,
+  `customer-profile-initialization`, `google-sign-in`.
+- 27 app/lib/component files: import paths only (`@/lib/x` → `@/packages/identity/x`).
+- 6 test files: import/file paths only. In `current-customer-wrapper.test.mts` the stubbed module name
+  changed from `@/lib/auth` to `@/packages/identity/auth` so the same stub still applies.
+- New `packages/identity/package.json` (name only).
+- Not moved: `lib/admin.ts` (hub dashboard counts, not identity); `packages/shared-identity` (has its own test).
+No dependencies added.
+
+### 4. Known leftovers (not hidden)
+`packages/identity` still imports three app files: `@/lib/db`, `@/lib/email`, `@/lib/deployment`.
+`deployment.ts` holds the Sentinel-only `TCM_QA_APP_ORIGIN` (PLAN 2.7). These make the package depend
+on the app until db/email/deployment get their own packages.
+
+### 5. Required checks
+```
+$ node scripts/check-boundaries.mjs
+Boundary check: 24 files scanned, 7 rules.   (shared-packages-know-no-products / -no-vendors now
+PASS                                          run on packages/identity)
+$ npx depcruise --config .dependency-cruiser.cjs packages   (apps/ does not exist: SKIPPED)
+✔ no dependency violations found (33 modules, 28 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck
+exit 0
+$ npm test
+tests 102 / pass 102 / fail 0
+$ DATABASE_URL unset; npx next build
+exit 0
+$ npm run build:product-contracts
+exit 0 (same as before the move)
+$ bash scripts/check-isolation.sh sentinel
+SKIPPED: apps/sentinel does not exist yet.
+```
+Test count before → after: 102 → 102.
+
+### 6. NOT VERIFIED
+- Live sign-in, sign-out, password reset and Google sign-in on the PR's Preview (owner click-through).
+- PLAN 2.2 review (auth code moved). The diff is import paths only; see section 2.
+
+### 7. Risks and surprises
+None found. AGENTS.md §5.3 lists auth code as stop-and-ask: flagged to the owner in the PR.
+
+### 8. Next PLAN item
+2.2 review, then 2.3 `packages/billing`.

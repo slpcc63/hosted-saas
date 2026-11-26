@@ -1,10 +1,10 @@
 import "server-only";
 
-import { requireSession } from "@/lib/auth/server";
+import { requireSession } from "@/packages/identity/auth/server";
 import {
   getAuthenticatedCustomerProfileRow,
   getOrCreateCustomerProfileRow
-} from "@/lib/customer-profile-initialization";
+} from "@/packages/identity/customer-profile-initialization";
 import { db } from "@/lib/db";
 
 export type CustomerProfile = {

@@ -1,7 +1,7 @@
 import { SiteHeader } from "@/components/site-header";
-import { requireSession } from "@/lib/auth/server";
-import { isAdmin } from "@/lib/authorization";
-import { getOrCreateCustomerProfile } from "@/lib/customers";
+import { requireSession } from "@/packages/identity/auth/server";
+import { isAdmin } from "@/packages/identity/authorization";
+import { getOrCreateCustomerProfile } from "@/packages/identity/customers";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";
 import { getTimeCardManagerOverview } from "@/lib/square-time-card-manager";

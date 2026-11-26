@@ -1,7 +1,7 @@
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { ResponsiveNavMenu } from "@/components/responsive-nav-menu";
-import { getServerSession } from "@/lib/auth/server";
-import { isAdmin } from "@/lib/authorization";
+import { getServerSession } from "@/packages/identity/auth/server";
+import { isAdmin } from "@/packages/identity/authorization";
 import { getPublicRouting } from "@/lib/request-routing";
 
 type SiteHeaderProps = {

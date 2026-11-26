@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { runGoogleSignIn } from "../lib/google-sign-in.ts";
+import { runGoogleSignIn } from "../packages/identity/google-sign-in.ts";
 
 test("Google click behavior makes exactly one social sign-in request", async () => {
   const requests: Array<{ callbackURL: string; provider: "google" }> = [];

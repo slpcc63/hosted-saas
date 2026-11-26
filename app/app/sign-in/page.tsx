@@ -2,11 +2,11 @@ import { redirect } from "next/navigation";
 
 import { AuthForm } from "@/components/auth/auth-form";
 import { SiteHeader } from "@/components/site-header";
-import { isGoogleAuthConfigured } from "@/lib/auth-provider-config";
-import { getSafeLocalRedirect } from "@/lib/auth-redirect";
+import { isGoogleAuthConfigured } from "@/packages/identity/auth-provider-config";
+import { getSafeLocalRedirect } from "@/packages/identity/auth-redirect";
 import { isPreviewDeployment } from "@/lib/deployment";
 import { getPublicRouting } from "@/lib/request-routing";
-import { getServerSession } from "@/lib/auth/server";
+import { getServerSession } from "@/packages/identity/auth/server";
 
 type SignInPageProps = {
   searchParams?: Promise<{

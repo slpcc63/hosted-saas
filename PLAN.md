@@ -21,7 +21,7 @@ land. Final state: zero skipped, zero ALLOWED.
   Proof: `next build` succeeds with **no** database configured. _Done 2026-11-22 (branch `step/1.3-static-homepage-catalog`); owner chose a code-defined catalog._
 
 ## Phase 2 — Shared packages (each one: copy-free move, then delete duplicates)
-- [ ] 2.1 (M) `packages/identity`: auth, customers, customer-profile, shared-identity. Update imports in `apps/web`.
+- [x] 2.1 (M) `packages/identity`: auth, customers, customer-profile, shared-identity. Update imports in `apps/web`. _Done 2026-11-26 (branch `step/2.1-packages-identity`). App is still at the repo root (1.2 deferred), so imports are `@/packages/identity/...`. `packages/shared-identity` left in place (own test); `lib/admin.ts` stays with the hub. The package still imports `@/lib/db`, `@/lib/email` and `@/lib/deployment` from the app; those move in later steps (deployment.ts in 2.7)._
 - [ ] 2.2 (H) Auth-related: because 2.1 contains auth/session code, a paid reviewer looks at the diff once.
 - [ ] 2.3 (M) `packages/billing`: subscriptions, products, entitlements, Stripe wrapper. Entitlement check becomes one function: `hasAccess(account, extensionId)`.
 - [ ] 2.4 (H) Billing diff reviewed by a human (touches Stripe).

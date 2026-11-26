@@ -41,7 +41,7 @@ registerHooks({
       };
     }
 
-    if (specifier === "@/lib/auth") {
+    if (specifier === "@/packages/identity/auth") {
       return { shortCircuit: true, url: authModuleUrl };
     }
 
@@ -126,7 +126,7 @@ Object.assign(globalThis, {
   }
 });
 
-const { requireCurrentCustomer } = await import(moduleUrl("lib/customers.ts"));
+const { requireCurrentCustomer } = await import(moduleUrl("packages/identity/customers.ts"));
 const requireCurrentCustomerWithLegacyFallback = requireCurrentCustomer as (
   nextPath: string,
   legacyMissingCustomerRedirect?: string

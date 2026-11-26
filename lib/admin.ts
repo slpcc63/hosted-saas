@@ -1,7 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import { requireAdmin } from "@/lib/authorization";
+import { requireAdmin } from "@/packages/identity/authorization";
 
 export type AdminDashboardCounts = {
   customers: number;

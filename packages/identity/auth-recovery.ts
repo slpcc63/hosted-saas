@@ -2,7 +2,7 @@ import "server-only";
 
 import type { User } from "better-auth";
 
-import { createPasswordResetEmailContent } from "@/lib/auth-recovery-content";
+import { createPasswordResetEmailContent } from "@/packages/identity/auth-recovery-content";
 import { sendTransactionalEmail } from "@/lib/email";
 
 export async function sendPasswordResetEmail(input: {

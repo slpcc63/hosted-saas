@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { requireCurrentCustomer } from "@/lib/customers";
+import { requireCurrentCustomer } from "@/packages/identity/customers";
 import { getPublishedSubscriptionPlans } from "@/lib/products";
 import { getPublicRouting } from "@/lib/request-routing";
 import { ensureSeedCatalog } from "@/lib/seed";

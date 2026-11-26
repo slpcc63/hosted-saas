@@ -1,8 +1,8 @@
 import "server-only";
 
 import { db } from "@/lib/db";
-import type { CustomerProfile } from "@/lib/customers";
-import { ensureCustomerProfilesTable } from "@/lib/customers";
+import type { CustomerProfile } from "@/packages/identity/customers";
+import { ensureCustomerProfilesTable } from "@/packages/identity/customers";
 import {
   getDefaultManagedSenderEmail,
   parseManagedSenderLocalPart,

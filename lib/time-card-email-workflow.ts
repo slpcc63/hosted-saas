@@ -3,7 +3,7 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 
 import { db } from "@/lib/db";
-import { ensureCustomerProfilesTable } from "@/lib/customers";
+import { ensureCustomerProfilesTable } from "@/packages/identity/customers";
 import { getAppOrigin } from "@/lib/deployment";
 import { sendTransactionalEmail } from "@/lib/email";
 import { getValidSquareConnection } from "@/lib/square-connections";

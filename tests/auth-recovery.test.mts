@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { getGoogleProviderConfig, isGoogleAuthConfigured } from "../lib/auth-provider-config.ts";
-import { getSafeLocalRedirect } from "../lib/auth-redirect.ts";
-import { createPasswordResetEmailContent } from "../lib/auth-recovery-content.ts";
+import { getGoogleProviderConfig, isGoogleAuthConfigured } from "../packages/identity/auth-provider-config.ts";
+import { getSafeLocalRedirect } from "../packages/identity/auth-redirect.ts";
+import { createPasswordResetEmailContent } from "../packages/identity/auth-recovery-content.ts";
 
 test("password reset email contains the one-time reset URL and expiry guidance", () => {
   const content = createPasswordResetEmailContent({

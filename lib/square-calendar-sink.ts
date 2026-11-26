@@ -3,7 +3,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 
 import { getCalendarSinkAccessState } from "@/lib/calendar-sink-access";
-import { ensureCustomerProfilesTable } from "@/lib/customers";
+import { ensureCustomerProfilesTable } from "@/packages/identity/customers";
 import { db } from "@/lib/db";
 import {
   getSquareConnection,
