@@ -32,7 +32,8 @@ land. Final state: zero skipped, zero ALLOWED.
 - [x] 2.7 (D) `packages/runtime-kit` + extension **registry**: replace the hardcoded product-id/env-prefix ternary in `product-runtime`; move `TCM_QA_APP_ORIGIN` out of shared `deployment.ts`; delete its allow-list entry.
   _2026-11-26: owner approved doing 2.7 before 2.5 (Square connection code had product names hardcoded). Part 1 on branch `step/2.7-extension-registry`: `packages/runtime-kit/registry.ts` (provider-neutral) + `lib/extension-registry.ts` (both entries); product-runtime prefix, Square plugin id/prefix/legacy settings, default scopes and product home paths now read the registry. Part 2 done 2026-11-26 (branch `step/2.7b-qa-settings-registry`; owner chose keeping the setting names): `TCM_QA_HOST`, `TCM_QA_APP_ORIGIN` and `TCM_QA_DATABASE_URL` are declared in Sentinel's registry entry; shared code reads them through the registry. No Vercel change. Allow-list was already empty._
   Proof: `guardrails.config.json` `allow` is empty; boundary check passes with no ALLOWED lines.
-- [ ] 2.8 (M) Dashboard reads extensions from the registry instead of importing Sentinel's `getTimeCardManagerOverview`; `seed.ts` stops hardcoding product slugs.
+- [x] 2.8 (M) Dashboard reads extensions from the registry instead of importing Sentinel's `getTimeCardManagerOverview`; `seed.ts` stops hardcoding product slugs.
+  _Done 2026-11-26 (branch `step/2.8-dashboard-registry`; owner chose behavior-preserving). Extensions give the dashboard a plain-data card (`packages/runtime-kit/dashboard.ts`); `app/app/dashboard/providers.ts` is the only link. `seed.ts` already had no slugs after 1.3 (they are catalog data in `lib/catalog-data.ts`). The `apps/` deletion proof waits for apps to exist. Dashboard copy/redesign incl. Cadence card → Stage 3._
   Proof: `apps/web` builds with `apps/sentinel` and `apps/cadence` temporarily deleted (`rm -rf` in a scratch clone, paste output).
 
 ## Phase 3 — Sentinel

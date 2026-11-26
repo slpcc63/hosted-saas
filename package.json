@@ -23,12 +23,13 @@
     "build:calendar-sync:contract": "npm --prefix products/calendar-sync run build:contract",
     "build:time-card-manager:contract": "npm --prefix products/time-card-manager run build:contract",
     "build:product-contracts": "npm run build:calendar-sync:contract && npm run build:time-card-manager:contract",
-    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper && npm run test:product-boundaries && npm run test:product-runtime-isolation && npm run test:auth-independence && npm run test:auth-origin && npm run test:calendar-seed && npm run test:homepage-catalog && npm run test:extension-registry",
+    "test": "npm run test:calendar-sync && npm run test:time-card && npm run test:missing-punch && npm run test:tcm-qa && npm run test:auth && npm run test:auth-wrapper && npm run test:product-boundaries && npm run test:product-runtime-isolation && npm run test:auth-independence && npm run test:auth-origin && npm run test:calendar-seed && npm run test:homepage-catalog && npm run test:extension-registry && npm run test:dashboard-registry",
     "calendar:seed": "node --no-warnings --experimental-transform-types --env-file-if-exists=.env.calendar-sync.local scripts/calendar-sync-seed.mjs",
     "test:calendar-seed": "node --no-warnings --experimental-transform-types --test tests/calendar-sync-seed.test.mjs",
     "test:homepage-catalog": "node --no-warnings --experimental-strip-types --test tests/homepage-static-catalog.test.mts",
     "typecheck": "next typegen && tsc --noEmit",
-    "test:extension-registry": "node --no-warnings --experimental-strip-types --test tests/extension-registry.test.mts"
+    "test:extension-registry": "node --no-warnings --experimental-strip-types --test tests/extension-registry.test.mts",
+    "test:dashboard-registry": "node --no-warnings --experimental-strip-types --test tests/dashboard-registry.test.mts"
   },
   "dependencies": {
     "@types/pg": "^8.20.0",
