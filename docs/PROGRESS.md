@@ -491,3 +491,29 @@ Roadmap: local implementation/tests complete; isolated preview deployment comple
 report_back_to: Sniffies / Lens distribution and iPhone app chat
 report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
 report_back_instructions: Return native build identity and device sign-in/transfer results or blocker here, preserving this server test snapshot. Do not send passwords, session cookies or private profiles. No public release without owner approval.
+
+## Owner-approved Sniffies recipe pilot — November 26, 2026
+
+1. Added the opt-in recipe API to the isolated Lens preview. Its database migration ran only in the controlled-preview project's `lens_preview` database. The table stores allowlisted field tags and one keyed account reference per vote. The existing preview app role can read, insert or update its rows and cannot delete them.
+2. The route requires the exact Lens preview branch and its existing controlled-preview environment. It checks the product database host and name before connecting. Production does not activate the route. The shared sign-in code, settings, and other databases are untouched.
+3. Added the recipe route, migration, and four unit tests. No dependencies or protected files changed.
+4. No existing tests weakened or edited.
+5. Checks:
+   ```text
+   Boundary check: 0 files scanned, 7 rules (future packages absent).
+   PASS
+   ✔ no dependency violations found (6 modules, 4 dependencies cruised)
+   PASS: no check-weakening patterns added.
+   ✓ Route types generated successfully
+   npm test: 107 tests passed, 0 failed
+   node --test tests/lens-recipe.test.mjs: 4 passed, 0 failed
+   SKIPPED: apps/sentinel does not exist yet.
+   ```
+6. Pending: live API readback and two verified preview accounts. The preview identity database currently has one verified account.
+7. No production changes or deployment environment changes. The native candidate still needs the verified preview address.
+8. Owner approved the isolated Lens preview migration and deployment on November 26.
+9. Next: validate the preview API and provide a preview-enabled Lens build for two-account testing.
+
+report_back_to: Sniffies / Lens distribution and iPhone app chat
+report_back_url: codex://threads/01a1c972-14de-7132-ad54-1b614a52380e
+report_back_instructions: Report the preview deployment, verified two-account result, native build, or the precise blocker. Omit identities and profile values.
