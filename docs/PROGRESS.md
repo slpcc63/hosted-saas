@@ -355,3 +355,40 @@ SKIPPED: apps/sentinel does not exist yet.
 
 ### 8. Next PLAN item
 2.3 part 2 — `hasAccess(account, extensionId)`; then 2.4 review.
+
+## Fix — Preview "Preview" links can sign in (Claude, 2026-11-26; owner-approved)
+
+### 1. In plain language
+Every Preview has two addresses: a unique one and a branch one (the "Preview" link on pull requests).
+Sign-in only trusted the unique one, so the PR link always failed with "Invalid origin". Previews now
+also trust their own branch address.
+
+### 2. Could a customer notice?
+No. Production and app.slpcc63.com are untouched: the new address is only trusted when Vercel says the
+deployment is a Preview, and only if it is a plain `*.vercel.app` host name.
+
+### 3. What changed
+- `lib/deployment.ts`: new `getVercelBranchOrigin()` reads Vercel's built-in `VERCEL_BRANCH_URL`; added to
+  the trusted-origin list. The main sign-in address (`getBetterAuthOrigin`) is unchanged, so reset-email
+  links still use the unique address.
+- `tests/auth-preview-origin.test.mts`: 3 new tests (trusted on Preview; never outside Preview; malformed
+  values ignored). Existing tests unchanged.
+
+### 4. Required checks
+```
+$ node scripts/check-boundaries.mjs                         PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages   ✔ no dependency violations found
+$ bash scripts/check-test-weakening.sh origin/integration/v1  PASS
+$ npm run typecheck                                         exit 0
+$ npm test                                                  tests 105 / pass 105 / fail 0
+$ DATABASE_URL unset; npx next build                        exit 0
+```
+Test count before → after: 102 → 105.
+
+### 5. NOT VERIFIED
+- Sign-in on this PR's branch address (owner check after the Preview builds).
+- Google sign-in on Preview branch addresses: Google only accepts redirect addresses registered with it,
+  and Previews do not have Google keys anyway. Unchanged by this fix.
+
+### 6. Next
+2.3 part 2 — `hasAccess(account, extensionId)`.

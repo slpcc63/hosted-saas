@@ -3,6 +3,25 @@ function getVercelPreviewOrigin(environment: NodeJS.ProcessEnv) {
   return vercelUrl ? `https://${vercelUrl}` : null;
 }
 
+// The branch address Vercel gives every Preview (hosted-saas-git-<branch>-…vercel.app). It is the
+// "Preview" link on pull requests, but it differs from VERCEL_URL, so sign-in rejected it as an
+// untrusted origin. Trusted only on Preview, and only as a plain *.vercel.app host name.
+export function getVercelBranchOrigin(
+  environment: NodeJS.ProcessEnv = process.env
+) {
+  if (environment.VERCEL_ENV !== "preview") {
+    return null;
+  }
+
+  const branchHost = environment.VERCEL_BRANCH_URL?.trim().toLowerCase();
+
+  if (!branchHost || !/^[a-z0-9-]+\.vercel\.app$/.test(branchHost)) {
+    return null;
+  }
+
+  return `https://${branchHost}`;
+}
+
 export function getAuthPreviewOrigin(
   environment: NodeJS.ProcessEnv = process.env
 ) {
@@ -110,6 +129,7 @@ export function getBetterAuthTrustedOrigins(
         getAppOrigin(environment),
         getMarketingOrigin(environment),
         getAuthPreviewOrigin(environment),
+        getVercelBranchOrigin(environment),
         ...(environment.BETTER_AUTH_TRUSTED_ORIGINS ?? "")
           .split(",")
           .map((origin) => origin.trim())

@@ -5,7 +5,8 @@ import {
   getAppOrigin,
   getAuthPreviewOrigin,
   getBetterAuthOrigin,
-  getBetterAuthTrustedOrigins
+  getBetterAuthTrustedOrigins,
+  getVercelBranchOrigin
 } from "../lib/deployment.ts";
 
 function previewEnvironment(
@@ -98,4 +99,60 @@ test("the Preview override cannot change Production origin behavior", () => {
     "https://app.slpcc63.com",
     "https://slpcc63.com"
   ]);
+});
+
+test("Preview also trusts Vercel's branch address so the pull-request Preview link can sign in", () => {
+  const environment = previewEnvironment({
+    VERCEL_BRANCH_URL: "hosted-saas-git-step-21-packages-5e0c21-slpcc63-8889s-projects.vercel.app"
+  });
+
+  assert.equal(
+    getVercelBranchOrigin(environment),
+    "https://hosted-saas-git-step-21-packages-5e0c21-slpcc63-8889s-projects.vercel.app"
+  );
+  assert.deepEqual(getBetterAuthTrustedOrigins(environment), [
+    "https://generated-auth-preview.vercel.app",
+    "https://hosted-saas-git-step-21-packages-5e0c21-slpcc63-8889s-projects.vercel.app"
+  ]);
+  assert.equal(
+    getBetterAuthOrigin(environment),
+    "https://generated-auth-preview.vercel.app"
+  );
+});
+
+test("the branch address is never trusted outside Preview", () => {
+  for (const vercelEnvironment of ["production", "development", undefined]) {
+    const environment = previewEnvironment({
+      VERCEL_ENV: vercelEnvironment,
+      VERCEL_BRANCH_URL: "hosted-saas-git-main-slpcc63-8889s-projects.vercel.app"
+    });
+
+    assert.equal(getVercelBranchOrigin(environment), null, String(vercelEnvironment));
+    assert.ok(
+      !getBetterAuthTrustedOrigins(environment).some((origin) => origin.includes("-git-main-")),
+      String(vercelEnvironment)
+    );
+  }
+});
+
+test("a branch address that is not a plain vercel.app host name is ignored", () => {
+  const invalidBranchHosts = [
+    "evil.example.com",
+    "hosted-saas-git-x.vercel.app.evil.com",
+    "hosted-saas-git-x.vercel.app/path",
+    "https://hosted-saas-git-x.vercel.app",
+    "user@hosted-saas-git-x.vercel.app",
+    ""
+  ];
+
+  for (const host of invalidBranchHosts) {
+    const environment = previewEnvironment({ VERCEL_BRANCH_URL: host });
+
+    assert.equal(getVercelBranchOrigin(environment), null, host);
+    assert.deepEqual(
+      getBetterAuthTrustedOrigins(environment),
+      ["https://generated-auth-preview.vercel.app"],
+      host
+    );
+  }
 });
