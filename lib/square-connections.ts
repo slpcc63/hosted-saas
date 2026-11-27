@@ -1,5 +1,6 @@
 import "server-only";
 
+import { legacySquareConnectionOwner } from "@/lib/extension-registry";
 import { db } from "@/lib/db";
 import { ensureCustomerProfilesTable } from "@/packages/identity/customers";
 import {
@@ -215,7 +216,7 @@ export async function getSquareConnection(input: {
     return mapAndRewriteSquareConnection(result.rows[0]);
   }
 
-  if (input.pluginId !== "square-calendar-sink") {
+  if (input.pluginId !== legacySquareConnectionOwner) {
     return null;
   }
 

@@ -4,7 +4,11 @@ import { resolve } from "node:path";
 import test from "node:test";
 
 import { createExtensionRegistry, type ExtensionDefinition } from "../packages/runtime-kit/registry.ts";
-import { extensionRegistry } from "../lib/extension-registry.ts";
+import {
+  extensionRegistry,
+  legacySquareConnectionOwner,
+  squareConnectedProductSlugs
+} from "../lib/extension-registry.ts";
 import { getProductEnvironmentPrefix, productRuntimeIds } from "../lib/product-runtime.ts";
 import { computePublicRouting } from "../lib/public-routing.ts";
 import {
@@ -132,4 +136,22 @@ test("shared host, routing, origin and database code name no product QA setting"
   for (const file of ["lib/deployment.ts", "lib/product-host.ts", "lib/request-routing.ts", "lib/public-routing.ts", "lib/database-url.ts"]) {
     assert.doesNotMatch(readFileSync(resolve(root, file), "utf8"), /TCM_QA_|TimeCardManagerQa/, file);
   }
+});
+
+test("Square-connected products and the legacy connection owner match the old hardcoded values", () => {
+  assert.deepEqual([...squareConnectedProductSlugs], ["square-calendar-sink", "square-time-card-manager"]);
+  // The pre-split Square row (no product id) has always belonged to Calendar Sync; Sentinel never
+  // falls back to it.
+  assert.equal(legacySquareConnectionOwner, "square-calendar-sink");
+});
+
+test("at most one product may own a provider's legacy shared connection", () => {
+  const base = { displayName: "X", homePath: "/x", connections: { anyProvider: { defaultScopes: ["A"], ownsLegacySharedConnection: true } } };
+  assert.throws(
+    () => createExtensionRegistry([
+      { ...base, technicalId: "a", productSlug: "a", environmentPrefix: "A_X" },
+      { ...base, technicalId: "b", productSlug: "b", environmentPrefix: "B_X" }
+    ]),
+    /Only one extension may own the legacy shared anyProvider connection/
+  );
 });

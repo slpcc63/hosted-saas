@@ -2,13 +2,15 @@ import "server-only";
 
 import { db } from "@/lib/db";
 import { ensureCustomerProfilesTable } from "@/packages/identity/customers";
+import {
+  squareConnectedProductSlugs,
+  type SquareConnectedProductSlug
+} from "@/lib/extension-registry";
 
-export const squarePluginIds = [
-  "square-calendar-sink",
-  "square-time-card-manager"
-] as const;
+// Products that connect to Square, from the extension registry.
+export const squarePluginIds = squareConnectedProductSlugs;
 
-export type SquarePluginId = (typeof squarePluginIds)[number];
+export type SquarePluginId = SquareConnectedProductSlug;
 
 export type SquarePluginInstallation = {
   config: Record<string, unknown>;

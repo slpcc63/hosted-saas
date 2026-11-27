@@ -11,6 +11,9 @@ export type ConnectionSettings = {
   readonly legacyUnprefixedSettings?: boolean;
   // Legacy shared-root redirect URI used when the product's own redirect setting is not configured.
   readonly legacyRedirectUri?: string;
+  // This product owns the connection row saved before connections were split per product (stored
+  // with no product id). At most one product per provider may claim it.
+  readonly ownsLegacySharedConnection?: boolean;
 };
 
 // A QA deployment that opens straight into one product. Each value names the environment setting
@@ -55,7 +58,12 @@ const homePathPattern = /^\/[a-z0-9-]+(\/[a-z0-9-]+)*$/;
 export function createExtensionRegistry<const T extends ExtensionDefinition>(
   definitions: readonly T[]
 ): ExtensionRegistry<T> {
-  const seen = { id: new Set<string>(), slug: new Set<string>(), prefix: new Set<string>() };
+  const seen = {
+    id: new Set<string>(),
+    slug: new Set<string>(),
+    prefix: new Set<string>(),
+    legacyOwner: new Set<string>()
+  };
 
   for (const definition of definitions) {
     if (!definition.technicalId || seen.id.has(definition.technicalId)) {
@@ -73,6 +81,12 @@ export function createExtensionRegistry<const T extends ExtensionDefinition>(
     for (const [provider, connection] of Object.entries(definition.connections ?? {})) {
       if (connection.defaultScopes.length === 0) {
         throw new Error(`Extension "${definition.technicalId}" declares ${provider} without default scopes.`);
+      }
+      if (connection.ownsLegacySharedConnection) {
+        if (seen.legacyOwner.has(provider)) {
+          throw new Error(`Only one extension may own the legacy shared ${provider} connection.`);
+        }
+        seen.legacyOwner.add(provider);
       }
     }
 
