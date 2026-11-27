@@ -1,19 +1,26 @@
+import { findQaFocusExtension } from "./extension-registry.ts";
+
 const defaultAppSubdomain = "app";
 const defaultRootDomain = "slpcc63.com";
 
-type ProductHostEnvironment = {
+type ProductHostEnvironment = Readonly<Record<string, string | undefined>> & {
   APP_SUBDOMAIN?: string;
   NEXT_PUBLIC_ROOT_DOMAIN?: string;
-  TCM_QA_HOST?: string;
 };
 
-export function isTimeCardManagerQaHostname(
+// App path of the product a QA hostname opens into (from the registry), or null.
+export function getQaFocusHomePath(
   hostname: string,
   environment: ProductHostEnvironment = process.env as ProductHostEnvironment
 ) {
-  const configuredHostname = environment.TCM_QA_HOST?.trim().toLowerCase();
+  return findQaFocusExtension(hostname, environment)?.homePath ?? null;
+}
 
-  return Boolean(configuredHostname) && hostname.toLowerCase() === configuredHostname;
+export function isQaFocusHostname(
+  hostname: string,
+  environment: ProductHostEnvironment = process.env as ProductHostEnvironment
+) {
+  return getQaFocusHomePath(hostname, environment) !== null;
 }
 
 export function isApplicationHostname(
@@ -25,7 +32,7 @@ export function isApplicationHostname(
 
   return hostname === `${appSubdomain}.${rootDomain}` ||
     hostname === `${appSubdomain}.localhost` ||
-    isTimeCardManagerQaHostname(hostname, environment);
+    isQaFocusHostname(hostname, environment);
 }
 
 export function getApplicationRewritePath(
@@ -33,8 +40,10 @@ export function getApplicationRewritePath(
   hostname: string,
   environment: ProductHostEnvironment = process.env as ProductHostEnvironment
 ) {
-  if (pathname === "/" && isTimeCardManagerQaHostname(hostname, environment)) {
-    return "/app/time-card-manager";
+  const qaFocusHomePath = pathname === "/" ? getQaFocusHomePath(hostname, environment) : null;
+
+  if (qaFocusHomePath) {
+    return `/app${qaFocusHomePath}`;
   }
 
   return pathname === "/" ? "/app" : `/app${pathname}`;

@@ -55,13 +55,9 @@ test("the auth-only candidate retains production origin and database selection",
 
   assert.match(deployment, /NEXT_PUBLIC_APP_URL/);
   assert.match(deployment, /NEXT_PUBLIC_MARKETING_SITE_URL/);
-  // TODO(restructure): TCM_QA_APP_ORIGIN is a Sentinel-specific override that
-  // still lives in shared deployment code. Move it into the Sentinel product
-  // layer, then tighten this back to /TCM_QA_|CALENDAR_SYNC_|TIME_CARD_MANAGER_/.
-  assert.doesNotMatch(
-    deployment.replaceAll("TCM_QA_APP_ORIGIN", ""),
-    /TCM_QA_|CALENDAR_SYNC_|TIME_CARD_MANAGER_/
-  );
+  // PLAN 2.7: the Sentinel QA origin now lives in Sentinel's registry entry,
+  // so shared deployment code names no product setting at all.
+  assert.doesNotMatch(deployment, /TCM_QA_|CALENDAR_SYNC_|TIME_CARD_MANAGER_/);
 
   // Database selection moved from db.ts into database-url.ts during the
   // runtime split; db.ts must stay free of product-specific variables.

@@ -6,7 +6,8 @@ type PublicRoutingInput = {
   hostname: string;
   preview: boolean;
   productRuntime: ProductRuntimeId | null;
-  timeCardManagerQaHost: boolean;
+  // App path of the product this QA hostname opens into, or null (lib/product-host.ts).
+  qaFocusHomePath: string | null;
 };
 
 export function computePublicRouting(input: PublicRoutingInput) {
@@ -15,9 +16,7 @@ export function computePublicRouting(input: PublicRoutingInput) {
     ? extensionRegistry.byTechnicalId(input.productRuntime).homePath
     : null;
   const dashboardPath = productHomePath ?? (
-    input.timeCardManagerQaHost
-      ? "/time-card-manager"
-      : appHost ? "/dashboard" : "/app/dashboard"
+    input.qaFocusHomePath ?? (appHost ? "/dashboard" : "/app/dashboard")
   );
   const signInPath = `/sign-in?next=${encodeURIComponent(dashboardPath)}`;
   const appHomePath = productHomePath ?? (appHost ? "/" : "/app");

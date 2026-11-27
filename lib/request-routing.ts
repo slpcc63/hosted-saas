@@ -3,7 +3,7 @@ import "server-only";
 import { headers } from "next/headers";
 
 import { getMarketingOrigin, isPreviewDeployment } from "@/lib/deployment";
-import { isApplicationHostname, isTimeCardManagerQaHostname } from "@/lib/product-host";
+import { getQaFocusHomePath, isApplicationHostname } from "@/lib/product-host";
 import { getProductRuntime } from "@/lib/product-runtime";
 import { computePublicRouting } from "@/lib/public-routing";
 
@@ -11,7 +11,7 @@ export async function getPublicRouting() {
   const requestHeaders = await headers();
   const hostname = requestHeaders.get("host")?.split(":")[0] ?? "";
   const hostMatchesApplication = isApplicationHostname(hostname);
-  const timeCardManagerQaHost = isTimeCardManagerQaHostname(hostname);
+  const qaFocusHomePath = getQaFocusHomePath(hostname);
   const preview = isPreviewDeployment() && hostname.endsWith(".vercel.app");
   const productRuntime = getProductRuntime();
   const { appHomePath, appHost, dashboardPath, signInPath } = computePublicRouting({
@@ -19,9 +19,9 @@ export async function getPublicRouting() {
     hostname,
     preview,
     productRuntime,
-    timeCardManagerQaHost
+    qaFocusHomePath
   });
-  const launchProductHref = timeCardManagerQaHost
+  const launchProductHref = qaFocusHomePath
     ? signInPath
     : preview
     ? `/sign-in?next=${encodeURIComponent("/app/dashboard")}`

@@ -120,7 +120,7 @@ test("Cadence routing keeps sign-in and post-auth destinations inside Cadence", 
     hostname: "cadence.localhost",
     preview: false,
     productRuntime: "calendar-sync",
-    timeCardManagerQaHost: false
+    qaFocusHomePath: null
   });
   assert.equal(routing.appHost, true);
   assert.equal(routing.appHomePath, "/calendar-sink");
@@ -134,7 +134,7 @@ test("Sentinel routing keeps sign-in and post-auth destinations inside Sentinel"
     hostname: "sentinel.localhost",
     preview: false,
     productRuntime: "time-card-manager",
-    timeCardManagerQaHost: false
+    qaFocusHomePath: null
   });
   assert.equal(routing.appHost, true);
   assert.equal(routing.appHomePath, "/time-card-manager");

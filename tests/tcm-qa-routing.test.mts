@@ -5,7 +5,7 @@ import { selectDatabaseUrl } from "../lib/database-url.ts";
 import {
   getApplicationRewritePath,
   isApplicationHostname,
-  isTimeCardManagerQaHostname
+  isQaFocusHostname
 } from "../lib/product-host.ts";
 
 const qaEnvironment = {
@@ -15,7 +15,7 @@ const qaEnvironment = {
 };
 
 test("TCM QA is an application host with a product-specific landing page", () => {
-  assert.equal(isTimeCardManagerQaHostname("qa.tcm.slpcc63.com", qaEnvironment), true);
+  assert.equal(isQaFocusHostname("qa.tcm.slpcc63.com", qaEnvironment), true);
   assert.equal(isApplicationHostname("qa.tcm.slpcc63.com", qaEnvironment), true);
   assert.equal(
     getApplicationRewritePath("/", "qa.tcm.slpcc63.com", qaEnvironment),

@@ -513,6 +513,49 @@ PASS: no check-weakening patterns added.
 $ npm run typecheck                                   exit 0
 $ npm test                                            tests 115 / pass 115 / fail 0
 $ DATABASE_URL unset; npx next build                  exit 0
+## PLAN 2.7 (part 2) — Sentinel's QA settings move into its registry entry (Claude, 2026-11-26; owner chose A)
+
+### 1. In plain language
+qa.tcm.slpcc63.com opens straight into Time Card Manager, controlled by three Sentinel-only settings
+(`TCM_QA_HOST`, `TCM_QA_APP_ORIGIN`, `TCM_QA_DATABASE_URL`). Five shared files read them by name. Now
+Sentinel's registry entry names them, and shared code asks "is this hostname some product's QA address?"
+The setting names did not change, so nothing in Vercel needs to change.
+
+### 2. Could a customer notice?
+No (QA only). Old vs new code over 150 combinations of 6 setting sets × 6 hostnames × paths (application
+host check, root rewrite, dashboard/sign-in paths, app origin, auth origin, database choice):
+```
+old: 150 15235 5ff77e4f7fc7f6281e5957e89238bd3fe1a418a5eb0d5dbf85a11aaa87e1589b
+new: 150 15235 5ff77e4f7fc7f6281e5957e89238bd3fe1a418a5eb0d5dbf85a11aaa87e1589b
+```
+(count, size, SHA-256 of all results; identical.)
+
+### 3. What changed
+- `packages/runtime-kit/registry.ts`: optional `qa` block naming a product's QA settings.
+- `lib/extension-registry.ts`: Sentinel's `qa` entry; lookups `findQaFocusExtension`, `findQaAppOrigin`,
+  `findQaDatabaseUrl`.
+- `lib/deployment.ts`, `lib/product-host.ts`, `lib/request-routing.ts`, `lib/public-routing.ts`,
+  `lib/database-url.ts`: read through the registry. `isTimeCardManagerQaHostname` → `isQaFocusHostname`;
+  routing input `timeCardManagerQaHost` → `qaFocusHomePath`.
+- **Tests edited (AGENTS.md §5.2, needs owner approval):**
+  - `tcm-qa-routing.test.mts`: import renamed to `isQaFocusHostname`; same assertions.
+  - `extension-registry.test.mts`, `product-runtime-isolation.test.mts`: routing input field renamed.
+  - `auth-product-independence.test.mts`: **tightened**: the TODO that blanked out `TCM_QA_APP_ORIGIN`
+    before checking is removed, as the TODO asked once the setting moved.
+  - 2 new tests: Sentinel's QA setting names are pinned; five shared files name no QA setting.
+
+### 4. Required checks
+```
+$ node scripts/check-boundaries.mjs
+Boundary check: 32 files scanned, 7 rules.
+PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages
+✔ no dependency violations found (39 modules, 36 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck                                   exit 0
+$ npm test                                            tests 114 / pass 114 / fail 0
+$ DATABASE_URL unset; npx next build                  exit 0 (middleware included)
 $ npm run build:product-contracts                     exit 0
 $ product app builds (placeholder DB URL)             time-card-manager exit 0, calendar-sync exit 0
 $ bash scripts/check-isolation.sh sentinel            SKIPPED: apps/sentinel does not exist yet.
@@ -525,3 +568,9 @@ Test count before → after: 112 → 115.
 
 ### 7. Next
 2.7 part 2 (owner chose A: keep `TCM_QA_*` names, move them into Sentinel's registry entry).
+Test count before → after: 115 → 117 (after PR #11).
+
+### 5. NOT VERIFIED
+- After merge, on QA: https://qa.tcm.slpcc63.com/ should still open Time Card Manager (sign-in first),
+  and sign-in should still work there. The middleware reads these settings at run time on Vercel's edge,
+  the same way it did before; this is the check that proves it.
