@@ -636,3 +636,63 @@ Test count before → after: 117 → 119.
 ### 5. NOT VERIFIED
 - Connecting/disconnecting Square on a Preview (needs Square sandbox apps; Cadence's QA sandbox app is
   still missing).
+
+## PLAN 2.5 (part 2a) — Migration runner and "Run database migrations" button (Claude, 2026-11-27)
+
+### 1. In plain language
+Investigation (read-only): no migration system was in use. Nothing applies `supabase/migrations`; the app
+creates and alters its own tables while running (13 `ensure…Table` functions + ~40 statements in
+`lib/time-card-email-workflow.ts`). 14 tables exist only in that code; 6 exist only in migration files
+and no code uses them. The owner chose: plain SQL files, a small runner, and a manual GitHub button.
+
+This PR adds the runner and the button. **There are no migrations in it yet**, so pressing the button
+changes nothing. The first migration ("baseline", describing the tables that already exist) comes after
+the owner's read-only schema snapshots from Neon.
+
+### 2. Could a customer notice?
+No. No app code changed; no database is touched until someone runs the workflow.
+
+### 3. What changed (owner approved adding files under `scripts/` and `.github/`)
+- `scripts/migrate-lib.mjs`, `scripts/migrate.mjs` (`npm run db:migrate`): modes `plan` (report only),
+  `apply`, `baseline` (record files marked `-- migrate:baseline` as already applied without running them).
+  Safety: one run at a time (database lock); each file + its record in one transaction (failure rolls
+  back everything); edited-after-applied, missing and out-of-order files stop the run before any change;
+  `apply`/`baseline` refuse unless `--confirm-database` matches the connected database's name; the
+  connection string is never printed.
+- `.github/workflows/migrate.yml`: manual "Run database migrations" (environment qa/production, mode,
+  confirm name). Uses GitHub Environments with a `MIGRATION_DATABASE_URL` secret each.
+- `db/migrations/README.md`: rules for writing migrations; marks `supabase/migrations/` as historical.
+- Tests: `tests/migration-runner.test.mts` (6, in `npm test`); `tests/migration-runner.integration.mts`
+  (real database, local only, database must be named `migrate_test`).
+No dependencies added (`pg` already present). No tests edited.
+
+### 4. Required checks
+```
+$ node scripts/check-boundaries.mjs
+Boundary check: 34 files scanned, 7 rules.
+PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages
+✔ no dependency violations found (40 modules, 36 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck                                   exit 0
+$ npm test                                            tests 125 / pass 125 / fail 0
+$ npm run test:migration-runner-db (local PostgreSQL 16, migrate_test)   pass 1 / fail 0 / skipped 0
+$ DATABASE_URL unset; npx next build                  exit 0
+$ node scripts/migrate.mjs (local migrate_test):
+  plan                                  → "Up to date." exit 0
+  apply --confirm-database production   → "ERROR: Refusing to apply: … does not match … Nothing was changed." exit 1
+  apply --confirm-database migrate_test → "Up to date: nothing to do." exit 0
+  no MIGRATION_DATABASE_URL             → "ERROR: MIGRATION_DATABASE_URL is not set." exit 1
+```
+
+### 5. NOT VERIFIED
+- The GitHub workflow itself has not run. Owner setup needed first (see 6).
+
+### 6. Owner setup (once)
+1. GitHub → Settings → General → Default branch → `integration/v1` (the "Run workflow" button only
+   appears for workflows on the default branch; `main` is stale since Aug 21).
+2. GitHub → Settings → Environments → create `qa` and `production`; in each add secret
+   `MIGRATION_DATABASE_URL` = that database's Neon **direct** connection string. On `production`, add
+   yourself as Required reviewer.
+3. First use: Actions → Run database migrations → qa → plan. Expected: "Applied: 0. Pending: 0."

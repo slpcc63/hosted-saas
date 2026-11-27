@@ -1,0 +1,49 @@
+name: Run database migrations
+# Manual only. Choose the environment and mode, then type the database name to confirm.
+# Setup (owner, once): GitHub → Settings → Environments → create "qa" and "production", each with a
+# secret MIGRATION_DATABASE_URL (Neon *direct* connection string for that database). On "production",
+# add yourself as a Required reviewer so every run waits for your approval.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Which database
+        type: choice
+        options: [qa, production]
+        default: qa
+      mode:
+        description: "plan = show what would run (changes nothing); apply = run pending migrations; baseline = record baseline files as already applied"
+        type: choice
+        options: [plan, apply, baseline]
+        default: plan
+      confirm_database:
+        description: "Database name (required for apply/baseline; must match the database the secret points at)"
+        type: string
+        required: false
+
+concurrency:
+  group: migrate-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm ci
+      - name: Migrations (${{ inputs.mode }} on ${{ inputs.environment }})
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          MODE: ${{ inputs.mode }}
+          CONFIRM: ${{ inputs.confirm_database }}
+        run: |
+          if [ "$MODE" = "plan" ]; then
+            node scripts/migrate.mjs plan
+          else
+            node scripts/migrate.mjs "$MODE" --confirm-database "$CONFIRM"
+          fi
