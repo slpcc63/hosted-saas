@@ -457,7 +457,9 @@ test("Calendar disconnect deletes only the Calendar Sync connection", async () =
   assert.match(source, /revokeSquareAccessToken\(pluginId, accessToken\)/);
   assert.match(
     mutation,
-    /delete from public\.square_connections[\s\S]*plugin_id = \$2 or \(plugin_id is null and \$2 = 'square-calendar-sink'\)/
+    // PLAN 2.5: the legacy-row owner comes from the registry as $4 (Calendar Sync; pinned in
+    // tests/extension-registry.test.mts and exercised on a real database by the integration test).
+    /delete from public\.square_connections[\s\S]*plugin_id = \$2 or \(plugin_id is null and \$2 = \$4\)/
   );
 });
 

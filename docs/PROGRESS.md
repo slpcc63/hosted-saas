@@ -574,3 +574,65 @@ Test count before → after: 115 → 117 (after PR #11).
 - After merge, on QA: https://qa.tcm.slpcc63.com/ should still open Time Card Manager (sign-in first),
   and sign-in should still work there. The middleware reads these settings at run time on Vercel's edge,
   the same way it did before; this is the check that proves it.
+
+## PLAN 2.5 (part 1) — Product names out of the Square connection logic (Claude, 2026-11-27)
+
+### 1. In plain language
+The code that stores and deletes Square connections had the two product IDs written into it in three
+places: the list of Square-connected products, "the old pre-split connection belongs to Calendar Sync",
+and the delete query. Those now come from the registry (Calendar Sync's entry says it owns the old
+shared connection). This is groundwork for moving the Square code into its own package, which may not
+name products.
+
+### 2. Could a customer notice?
+No. Evidence on a real PostgreSQL 16 database (throwaway, local), old vs new delete code, every
+combination of 2 products × 4 rows (own row, other product's row, old shared row, another customer's
+row) × 2 callers (owner customer, other customer):
+```
+IDENTICAL (16 cases)
+square-calendar-sink      target=cal          as=owner deleted=1 left=33,44,55
+square-calendar-sink      target=legacy       as=owner deleted=1 left=22,33,55
+square-calendar-sink      target=otherCustCal as=other deleted=1 left=22,33,44
+square-time-card-manager  target=tcm          as=owner deleted=1 left=22,44,55
+```
+(The only deletions: each product its own row, Calendar Sync the old shared row. Sentinel can never
+delete the shared row, and the "otherCustCal" line is that customer deleting their own row.)
+The existing database test `test:product-mutation-isolation` also ran for real (not skipped): pass 1.
+
+### 3. What changed
+- `packages/runtime-kit/registry.ts`: `ownsLegacySharedConnection` on a connection; at most one product
+  per provider may claim it (checked).
+- `lib/extension-registry.ts`: Calendar Sync claims it; new `squareConnectedProductSlugs`,
+  `legacySquareConnectionOwner`.
+- `lib/square-plugin-installations.ts`: product list from the registry.
+- `lib/square-connections.ts`: legacy fallback checks the registry's owner.
+- `lib/square-connection-mutations.ts`: delete query takes the legacy owner as `$4` instead of a
+  hardcoded `'square-calendar-sink'`.
+- **Test edited (AGENTS.md §5.2, needs owner approval):** `tests/calendar-sync.test.mts` "Calendar
+  disconnect deletes only the Calendar Sync connection" pinned the SQL text with the product name; it now
+  expects `$2 = $4`. Behavior is covered by the real-database test and 2 new registry tests.
+- Not changed: the table-creation SQL still lists both product IDs in CHECK constraints (part 2,
+  migrations). Token encryption untouched.
+
+### 4. Required checks
+```
+$ node scripts/check-boundaries.mjs
+Boundary check: 34 files scanned, 7 rules.
+PASS
+$ npx depcruise --config .dependency-cruiser.cjs packages
+✔ no dependency violations found (40 modules, 36 dependencies cruised)
+$ bash scripts/check-test-weakening.sh origin/integration/v1
+PASS: no check-weakening patterns added.
+$ npm run typecheck                                   exit 0
+$ npm test                                            tests 119 / pass 119 / fail 0
+$ npm run test:product-mutation-isolation (local PostgreSQL 16)   pass 1 / fail 0 / skipped 0
+$ DATABASE_URL unset; npx next build                  exit 0
+$ npm run build:product-contracts                     exit 0
+$ product app builds (placeholder DB URL)             time-card-manager exit 0, calendar-sync exit 0
+$ bash scripts/check-isolation.sh sentinel            SKIPPED: apps/sentinel does not exist yet.
+```
+Test count before → after: 117 → 119.
+
+### 5. NOT VERIFIED
+- Connecting/disconnecting Square on a Preview (needs Square sandbox apps; Cadence's QA sandbox app is
+  still missing).

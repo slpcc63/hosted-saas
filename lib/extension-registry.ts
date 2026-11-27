@@ -18,7 +18,9 @@ const calendarSyncExtension = {
     square: {
       defaultScopes: ["MERCHANT_PROFILE_READ", "TIMECARDS_READ", "EMPLOYEES_READ"],
       legacyUnprefixedSettings: true,
-      legacyRedirectUri: "https://hosted-saas.vercel.app/api/integrations/square/callback"
+      legacyRedirectUri: "https://hosted-saas.vercel.app/api/integrations/square/callback",
+      // The pre-split Square connection row (no product id) is Calendar Sync's.
+      ownsLegacySharedConnection: true
     }
   }
 } as const satisfies ExtensionDefinition;
@@ -79,6 +81,21 @@ export function findQaDatabaseUrl(environment: Environment) {
   }
   return undefined;
 }
+
+// Products that connect to Square, and the one that owns the pre-split shared connection row.
+type SquareConnectedExtension = Extract<
+  (typeof extensionRegistry.definitions)[number],
+  { connections: { square: unknown } }
+>;
+export type SquareConnectedProductSlug = SquareConnectedExtension["productSlug"];
+
+export const squareConnectedProductSlugs = extensionRegistry.definitions
+  .filter((definition: ExtensionDefinition) => Boolean(definition.connections?.square))
+  .map((definition) => definition.productSlug) as readonly SquareConnectedProductSlug[];
+
+export const legacySquareConnectionOwner = (extensionRegistry.definitions.find(
+  (definition: ExtensionDefinition) => definition.connections?.square?.ownsLegacySharedConnection
+)?.productSlug ?? null) as SquareConnectedProductSlug | null;
 
 export type InstalledExtension = (typeof extensionRegistry.definitions)[number];
 export type InstalledExtensionId = InstalledExtension["technicalId"];
